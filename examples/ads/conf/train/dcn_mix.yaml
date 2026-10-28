@@ -25,7 +25,7 @@ model:
   batch_norm: false
 
 data:
-  path: /flagos-ads/datasets/criteo_x1
+  path: ${oc.env:FLAGOS_ADS_DATA,/flagos-ads/datasets}/criteo_x1
   valid_split: valid
   group_key: null
   num_workers: 2

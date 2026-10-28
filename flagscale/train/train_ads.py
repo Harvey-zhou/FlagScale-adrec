@@ -152,10 +152,30 @@ def autocast_context(device: torch.device, dtype_name: str, platform: Any = None
 
 
 def all_reduce_sum(values: list[float], device: torch.device) -> list[float]:
-    tensor = torch.tensor(values, dtype=torch.float64).to(device)
-    if dist.is_available() and dist.is_initialized():
-        dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+    # A single process has nothing to reduce, so no tensor has to touch the device
+    # (vendor runtimes do not all implement float64).  The multi-rank path uses
+    # float32: the values are only logged statistics (mean loss, throughput).
+    if not (dist.is_available() and dist.is_initialized()):
+        return [float(v) for v in values]
+    tensor = torch.tensor(values, dtype=torch.float32).to(device)
+    dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
     return tensor.cpu().tolist()
+
+
+def resolve_pin_memory(hardware: Any, platform: Any) -> bool:
+    """``train.hardware.pin_memory``: true / false, or null / "auto" for the platform default.
+
+    Some vendor runtimes report the CUDA platform without supporting page-locked host
+    memory, so the platform default can be overridden from the launch command.
+    """
+
+    value = hardware.get("pin_memory", None) if hardware else None
+    if isinstance(value, str):
+        value = value.strip().lower()
+        value = None if value in {"", "null", "none", "auto"} else value in {"1", "true", "yes", "on"}
+    if value is None:
+        return bool(platform and platform.supports_pin_memory())
+    return bool(value)
 
 
 class ExperimentLogger:
@@ -267,7 +287,7 @@ def train(config: DictConfig) -> None:
     dtype_name = str(model_cfg.get("torch_dtype", "fp32"))
     train_loader, valid_loader, test_loader, meta = build_ads_loaders(
         train_cfg.data, int(train_cfg.batch_size), int(train_cfg.get("eval_batch_size", train_cfg.batch_size)),
-        pin_memory=bool(platform and platform.supports_pin_memory()), seed=seed)
+        pin_memory=resolve_pin_memory(train_cfg.get("hardware", {}), platform), seed=seed)
     model = build_ads_model(str(model_cfg.model_type), model_cfg, meta, device)
     base_model = model
     parameters = sum(p.numel() for p in model.parameters())
@@ -300,16 +320,19 @@ def train(config: DictConfig) -> None:
         stats = train_epoch(model, train_loader, epoch, device, optimizer, embedding_parameters,
                             embedding_regularizer, max_grad_norm, dtype_name, platform, log_every)
         record: dict[str, Any] = {"epoch": epoch, "train": stats, "lr": optimizer.param_groups[0]["lr"]}
-        # [stop flag, new learning rate] decided on rank zero and shared.
-        decision = torch.tensor([0.0, optimizer.param_groups[0]["lr"]], dtype=torch.float64)
+        # [stop flag, reduce-lr flag] decided on rank zero and shared.  The new learning
+        # rate is derived on every rank from the flag, so no float64 value has to be
+        # broadcast through the device.
+        decision = torch.zeros(2, dtype=torch.float32)
         if rank_zero():
             valid = evaluate(base_model, valid_loader, device, dtype_name, platform, group_key)
             record["valid"] = valid
             value = float(valid[monitor])
             if value < best["value"] + 1e-6:
                 stopping_steps += 1
-                decision[1] = max(decision[1].item() * 0.1, 1e-6)
-                log(f"monitor {monitor}={value:.6f} did not improve; lr -> {decision[1].item():.6g}")
+                decision[1] = 1.0
+                next_lr = max(optimizer.param_groups[0]["lr"] * 0.1, 1e-6)
+                log(f"monitor {monitor}={value:.6f} did not improve; lr -> {next_lr:.6g}")
             else:
                 stopping_steps = 0
                 best = {"epoch": epoch, "value": value, "valid": valid,
@@ -325,8 +348,9 @@ def train(config: DictConfig) -> None:
             shared = decision.to(device)
             dist.broadcast(shared, src=0)
             decision = shared.cpu()
-        for group in optimizer.param_groups:
-            group["lr"] = float(decision[1].item())
+        if decision[1].item() > 0:
+            for group in optimizer.param_groups:
+                group["lr"] = max(group["lr"] * 0.1, 1e-6)
         history.append(record)
         if decision[0].item() > 0:
             log(f"early stop at epoch {epoch}")

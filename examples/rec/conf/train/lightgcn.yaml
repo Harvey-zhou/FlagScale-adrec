@@ -21,7 +21,7 @@ model:
   propagation: sparse
 
 data:
-  path: /flagos-rec/datasets/gowalla_lightgcn
+  path: ${oc.env:FLAGOS_REC_DATA,/flagos-rec/datasets}/gowalla_lightgcn
 
 optimizer:
   lr: 1.0e-3

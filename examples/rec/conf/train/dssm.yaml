@@ -24,7 +24,7 @@ model:
   temperature: 1.0
 
 data:
-  path: /flagos-rec/datasets/movielens_1m_dssm
+  path: ${oc.env:FLAGOS_REC_DATA,/flagos-rec/datasets}/movielens_1m_dssm
   num_workers: 2
   max_samples: null
   eval_max_samples: null

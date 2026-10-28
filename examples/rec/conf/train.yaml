@@ -9,7 +9,7 @@ defaults:
 
 experiment:
   exp_name: rec-${train.name}
-  exp_dir: /flagos-rec/ckpts/${train.name}-${train.hardware.device_type}
+  exp_dir: ${oc.env:FLAGOS_REC_CKPTS,/flagos-rec/ckpts}/${train.name}-${train.hardware.device_type}
   seed: ${train.seed}
   task:
     type: train
@@ -50,6 +50,9 @@ train:
     # "False", which Torch-FL does not treat as off and then routes every op
     # to the FlagGems backend table.
     use_flaggems: "false"
+    # true / false, or auto for the platform default.  Turn it off on a runtime that
+    # reports the CUDA platform without supporting page-locked host memory.
+    pin_memory: ${oc.env:FLAGSCALE_PIN_MEMORY,auto}
   system:
     checkpoint:
       save: ${train.output_dir}

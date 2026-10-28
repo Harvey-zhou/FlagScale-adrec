@@ -153,10 +153,30 @@ def autocast_context(device: torch.device, dtype_name: str, platform: Any = None
 
 
 def all_reduce_sum(values: list[float], device: torch.device) -> list[float]:
-    tensor = torch.tensor(values, dtype=torch.float64).to(device)
-    if dist.is_available() and dist.is_initialized():
-        dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+    # A single process has nothing to reduce, so no tensor has to touch the device
+    # (vendor runtimes do not all implement float64).  The multi-rank path uses
+    # float32: the values are only logged statistics (mean loss, throughput).
+    if not (dist.is_available() and dist.is_initialized()):
+        return [float(v) for v in values]
+    tensor = torch.tensor(values, dtype=torch.float32).to(device)
+    dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
     return tensor.cpu().tolist()
+
+
+def resolve_pin_memory(hardware: Any, platform: Any) -> bool:
+    """``train.hardware.pin_memory``: true / false, or null / "auto" for the platform default.
+
+    Some vendor runtimes report the CUDA platform without supporting page-locked host
+    memory, so the platform default can be overridden from the launch command.
+    """
+
+    value = hardware.get("pin_memory", None) if hardware else None
+    if isinstance(value, str):
+        value = value.strip().lower()
+        value = None if value in {"", "null", "none", "auto"} else value in {"1", "true", "yes", "on"}
+    if value is None:
+        return bool(platform and platform.supports_pin_memory())
+    return bool(value)
 
 
 class ExperimentLogger:
@@ -303,7 +323,7 @@ def train(config: DictConfig) -> None:
     dtype_name = str(model_cfg.get("torch_dtype", "fp32"))
     data = build_rec_data(task, train_cfg.data, int(train_cfg.batch_size),
                           int(train_cfg.get("eval_batch_size", train_cfg.batch_size)),
-                          pin_memory=bool(platform and platform.supports_pin_memory()), seed=seed)
+                          pin_memory=resolve_pin_memory(train_cfg.get("hardware", {}), platform), seed=seed)
     model = build_rec_model(str(model_cfg.model_type), model_cfg, data.meta, device)
     if model.task != task:
         raise ValueError(f"model {model_cfg.model_type!r} trains task {model.task!r}, config says {task!r}")

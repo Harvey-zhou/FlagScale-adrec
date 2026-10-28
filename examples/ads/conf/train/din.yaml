@@ -24,7 +24,7 @@ model:
   batch_norm: true
 
 data:
-  path: /flagos-ads/datasets/amazonelectronics_x1
+  path: ${oc.env:FLAGOS_ADS_DATA,/flagos-ads/datasets}/amazonelectronics_x1
   # BARS sets valid_data to test.csv: model selection and early stopping run
   # on the test split. Kept for comparability with the published number.
   valid_split: test

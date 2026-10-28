@@ -17,7 +17,8 @@ Layout (independent of the retrieval and recommendation modules):
 * `flagscale/train/datasets/ads.py`, `losses/ads.py`, `metrics/ads.py`;
 * `flagscale/train/train_ads.py`: FuxiCTR training procedure (embedding L2,
   gradient clipping, reduce-LR-on-plateau, early stopping, best checkpoint);
-* data under `/flagos-ads/datasets`, results under `/flagos-ads/ckpts`.
+* data under `$FLAGOS_ADS_DATA` (default `/flagos-ads/datasets`), results under
+  `$FLAGOS_ADS_CKPTS` (default `/flagos-ads/ckpts`).
 
 ## Data
 
@@ -44,9 +45,18 @@ python -m flagscale.run --config-path examples/ads/conf --config-name train acti
   train.hardware.device_type=cuda
 ```
 
-Outputs: `/flagos-ads/ckpts/<model>-<device>/checkpoint/{model.pt,config.json,metrics.json}`
+Kunlunxin (vendor torch, which reports the card as `cuda`):
+
+```bash
+VENDOR_ENV_SH=<script that activates the vendor torch> \
+  bash examples/run-adrec-kunlunxin.sh ads din 0   # cards: 0 or 0,1
+```
+
+Outputs: `$FLAGOS_ADS_CKPTS/<model>-<device>/checkpoint/{model.pt,config.json,metrics.json}`
 and an offline W&B run under `.../checkpoint/wandb` (upload with
 `wandb sync <dir>` after `wandb login`).
+`train.hardware.pin_memory` (or `FLAGSCALE_PIN_MEMORY`) turns page-locked host memory off
+for a runtime that does not support it.
 
 `python examples/ads/smoke.py --model din --device flagos` runs three steps
 without FlagScale.
