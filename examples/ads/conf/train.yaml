@@ -32,7 +32,9 @@ experiment:
     # The Torch-FL venv has another FlagScale checkout installed in editable
     # mode; put this checkout first so the ads modules are importable.
     PYTHONPATH: ${oc.env:FLAGSCALE_HOME,/flagos-ads/codes/FlagScale}
-    OMP_NUM_THREADS: "4"
+    # Inheritable: a container cgroup may grant only a few CPU cores, and the data
+    # configs also ask for dataloader workers.
+    OMP_NUM_THREADS: ${oc.env:OMP_NUM_THREADS,4}
     # Runs are written locally and uploaded later with `wandb sync`.
     WANDB_MODE: ${oc.env:WANDB_MODE,offline}
   cmds:
