@@ -1,0 +1,33 @@
+# TorchRec examples/retrieval two-tower (modules/two_tower.py, two_tower_train.py):
+# num_embeddings 1024**2, embedding_dim 64, layer_sizes [128, 64], learning_rate 0.01,
+# batch_size 32, num_iterations 100, trained on RandomRecDataset in MovieLens-20M format.
+# The data are random, so there is no accuracy target; see examples/rec/EVIDENCE.md.
+name: two_tower
+task: synthetic_two_tower
+seed: 42
+batch_size: 32
+eval_batch_size: 1024
+epochs: 1
+eval_every: 1
+select_metric: neg_loss
+log_every: 10
+output_dir: ${experiment.exp_dir}/checkpoint
+
+model:
+  model_type: two_tower
+  torch_dtype: fp32
+  embedding_dim: 64
+  layer_sizes: [128, 64]
+
+data:
+  # Nothing is read from disk: the batches are drawn from `seed`, in TorchRec's order.
+  num_embeddings: 1048576
+  num_iterations: 100
+  # RandomRecDataset caches this many batches and cycles through them.
+  num_generated_batches: 10
+  eval_batches: 10
+
+optimizer:
+  # Adam for the MLPs, row-wise Adagrad (embedding_lr) for the two tables.
+  lr: 1.0e-2
+  embedding_lr: 1.0e-2

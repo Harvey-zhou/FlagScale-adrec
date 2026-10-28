@@ -59,7 +59,7 @@ def loss_for_batch(model: nn.Module, task: str, batch: dict[str, Tensor], device
     batch = move_batch(batch, device)
     if task == "sequential":
         return sequential_loss(model, batch)
-    if task == "two_tower":
+    if task in {"two_tower", "synthetic_two_tower"}:
         return two_tower_loss(model, batch)
     if task == "graph":
         return bpr_loss(model, batch, weight_decay)

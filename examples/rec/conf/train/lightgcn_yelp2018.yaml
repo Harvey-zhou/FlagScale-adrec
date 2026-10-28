@@ -1,0 +1,29 @@
+# LightGCN on Yelp2018, same recipe as lightgcn.yaml (gusye1234/LightGCN-PyTorch defaults:
+# recdim 64, layer 3, lr 1e-3, decay 1e-4, bpr_batch 2048, epochs 1000, seed 2020, topks [20]).
+# Reference: paper Table 3 (3 layers) recall@20 0.0639 / ndcg@20 0.0525;
+# PyTorch README (layer=3) recall 0.06347 / ndcg 0.05238.
+name: lightgcn_yelp2018
+task: graph
+seed: 2020
+batch_size: 2048
+epochs: 1000
+eval_every: 20
+select_metric: recall@20
+topk: [20]
+log_every: 0
+output_dir: ${experiment.exp_dir}/checkpoint
+
+model:
+  model_type: lightgcn
+  torch_dtype: fp32
+  embedding_dim: 64
+  num_layers: 3
+  propagation: sparse
+
+data:
+  path: ${oc.env:FLAGOS_REC_DATA,/flagos-rec/datasets}/yelp2018_lightgcn
+
+optimizer:
+  lr: 1.0e-3
+  weight_decay: 0.0
+  bpr_weight_decay: 1.0e-4

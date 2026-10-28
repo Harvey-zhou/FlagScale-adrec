@@ -57,6 +57,7 @@ if _REQUESTED_DEVICE in {"flagos", "privateuseone"}:
 import numpy as np
 import torch
 import torch.distributed as dist
+import torch.nn.functional as F
 from omegaconf import DictConfig, OmegaConf
 from torch import nn
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -309,6 +310,31 @@ def evaluate_graph(model: nn.Module, data: RecData, device: torch.device, ks: tu
     return accumulator.result()
 
 
+@torch.no_grad()
+def evaluate_synthetic_two_tower(model: nn.Module, data: RecData, device: torch.device) -> dict[str, float]:
+    """Mean BCE on the held-out batches and on the training batches themselves.
+
+    The labels are random (TorchRec's example trains on random data), so the held-out
+    loss stays near ln 2.  The training batches are a small set that is cycled, so
+    their loss falling below ln 2 shows that the forward, backward and update work.
+    """
+
+    model.eval()
+
+    def mean_loss(loader) -> float:
+        total, count = 0.0, 0
+        for batch in loader:
+            batch = move_batch(batch, device)
+            logits = model(batch)
+            total += float(F.binary_cross_entropy_with_logits(
+                logits, batch["label"].to(logits.dtype), reduction="sum").item())
+            count += int(logits.shape[0])
+        return total / max(count, 1)
+
+    held_out = mean_loss(data.test)
+    return {"loss": held_out, "loss_trainset": mean_loss(data.validation), "neg_loss": -held_out}
+
+
 def fmt(metrics: dict[str, float]) -> str:
     return " ".join(f"{k}={v:.4f}" for k, v in metrics.items() if isinstance(v, float) and k != "elapsed_s")
 
@@ -338,11 +364,15 @@ def train(config: DictConfig) -> None:
         model = DDP(model, device_ids=[device.index] if device_type == "cuda" else None)
 
     optim_cfg = train_cfg.optimizer
-    optimizer = torch.optim.Adam(
-        model.parameters(), lr=float(optim_cfg.lr),
-        betas=tuple(float(b) for b in optim_cfg.get("betas", [0.9, 0.999])),
-        weight_decay=float(optim_cfg.get("weight_decay", 0.0)),
-    )
+    if hasattr(base_model, "configure_optimizer"):
+        # The model owns its optimizer recipe (e.g. row-wise Adagrad for the tables).
+        optimizer = base_model.configure_optimizer(optim_cfg)
+    else:
+        optimizer = torch.optim.Adam(
+            model.parameters(), lr=float(optim_cfg.lr),
+            betas=tuple(float(b) for b in optim_cfg.get("betas", [0.9, 0.999])),
+            weight_decay=float(optim_cfg.get("weight_decay", 0.0)),
+        )
     bpr_decay = float(optim_cfg.get("bpr_weight_decay", 0.0))
     epochs = int(train_cfg.epochs)
     eval_every = max(1, int(train_cfg.get("eval_every", 1)))
@@ -360,6 +390,8 @@ def train(config: DictConfig) -> None:
             result = evaluate_sequential(base_model, data.validation if split == "validation" else data.test, device)
         elif task == "two_tower":
             result = evaluate_two_tower(base_model, data, device, ks)
+        elif task == "synthetic_two_tower":
+            result = evaluate_synthetic_two_tower(base_model, data, device)
         else:
             result = evaluate_graph(base_model, data, device, ks)
         result["elapsed_s"] = time.perf_counter() - started

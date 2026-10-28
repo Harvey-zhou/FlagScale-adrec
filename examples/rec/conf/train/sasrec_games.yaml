@@ -1,0 +1,33 @@
+# SASRec on Amazon Games (Video Games) (Kang & McAuley, ICDM 2018): maxlen 50 and dropout 0.5 for the three sparser
+# datasets (ML-1M uses 200 and 0.2), otherwise the same recipe as sasrec.yaml.
+# Reference: paper Table III, SASRec Hit@10 0.7410 / NDCG@10 0.5360.  The official code prints
+# validation and test metrics every 20 epochs; see examples/rec/EVIDENCE.md.
+name: sasrec_games
+task: sequential
+seed: 42
+batch_size: 128
+eval_batch_size: 1024
+epochs: 200
+eval_every: 20
+select_metric: ndcg@10
+log_every: 0
+output_dir: ${experiment.exp_dir}/checkpoint
+
+model:
+  model_type: sasrec
+  torch_dtype: fp32
+  hidden_size: 50
+  num_blocks: 2
+  num_heads: 1
+  dropout: 0.5
+
+data:
+  path: ${oc.env:FLAGOS_REC_DATA,/flagos-rec/datasets}/games_sasrec
+  num_workers: 2
+  max_samples: null
+  eval_max_samples: null
+
+optimizer:
+  lr: 1.0e-3
+  betas: [0.9, 0.98]
+  weight_decay: 0.0

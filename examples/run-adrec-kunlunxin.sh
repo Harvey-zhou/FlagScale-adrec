@@ -5,7 +5,7 @@
 #   bash examples/run-adrec-kunlunxin.sh ads din 0
 #   bash examples/run-adrec-kunlunxin.sh rec lightgcn_yelp2018 1
 #   bash examples/run-adrec-kunlunxin.sh rec sasrec_beauty 0,1       # two cards, DDP
-#   bash examples/run-adrec-kunlunxin.sh rec sasrec 0 train.epochs=1
+#   bash examples/run-adrec-kunlunxin.sh rec two_tower 0 train.data.num_iterations=1000
 #
 # The vendor torch reports a Kunlunxin card as `cuda`, so the model, training and platform
 # code are the ones used on an NVIDIA card; only the launch differs.  This is the same route

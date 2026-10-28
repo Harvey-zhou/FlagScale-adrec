@@ -1,0 +1,31 @@
+# LightGCN on Amazon-Book, same recipe as lightgcn.yaml (gusye1234/LightGCN-PyTorch defaults:
+# recdim 64, layer 3, lr 1e-3, decay 1e-4, bpr_batch 2048, epochs 1000, seed 2020, topks [20]).
+# The paper also uses batch size 2048 on Amazon-Book.
+# Reference: paper Table 3 (3 layers) recall@20 0.0410 / ndcg@20 0.0318.  The PyTorch
+# README does not list Amazon-Book.
+# Evaluation scores [4096, 91599] per user batch (about 1.5 GB in fp32), more than Gowalla.
+name: lightgcn_amazon_book
+task: graph
+seed: 2020
+batch_size: 2048
+epochs: 1000
+eval_every: 20
+select_metric: recall@20
+topk: [20]
+log_every: 0
+output_dir: ${experiment.exp_dir}/checkpoint
+
+model:
+  model_type: lightgcn
+  torch_dtype: fp32
+  embedding_dim: 64
+  num_layers: 3
+  propagation: sparse
+
+data:
+  path: ${oc.env:FLAGOS_REC_DATA,/flagos-rec/datasets}/amazon_book_lightgcn
+
+optimizer:
+  lr: 1.0e-3
+  weight_decay: 0.0
+  bpr_weight_decay: 1.0e-4

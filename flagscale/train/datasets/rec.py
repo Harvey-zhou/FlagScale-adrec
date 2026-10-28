@@ -231,8 +231,68 @@ def normalized_adjacency(users: np.ndarray, items: np.ndarray, n_users: int) -> 
     }
 
 
+def _random_rec_batches(num_embeddings: int, batch_size: int, num_batches: int, seed: int) -> dict[str, np.ndarray]:
+    """Random (user, movie) batches drawn in the order of TorchRec's ``RandomRecDataset``.
+
+    ``examples/retrieval`` of TorchRec feeds the two-tower model with ``RandomRecDataset``
+    (keys ``userId`` / ``movieId``, ``ids_per_feature=1``, no dense features).  Per batch
+    and per feature it draws a 0/1 length for every sample (a sample with length 0 has an
+    empty bag, whose pooled embedding is zero), then that many ids, and finally the
+    binary labels.  Using the same generator and draw order gives the same batches for
+    the same seed on every device, because everything is drawn on the host.
+    """
+
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+    columns: dict[str, list[torch.Tensor]] = {
+        "user_id": [], "user_len": [], "movie_id": [], "movie_len": [], "label": []}
+    for _ in range(num_batches):
+        for key in ("user", "movie"):
+            length = torch.randint(0, 2, (batch_size,), dtype=torch.int32, generator=generator)
+            values = torch.randint(0, num_embeddings, (int(length.sum()),), generator=generator)
+            ids = torch.zeros(batch_size, dtype=torch.int64)
+            ids[length > 0] = values
+            columns[f"{key}_id"].append(ids)
+            columns[f"{key}_len"].append(length.to(torch.int64))
+        torch.randn(batch_size, 0, generator=generator)  # num_dense = 0 draws nothing; kept for parity
+        columns["label"].append(torch.randint(0, 2, (batch_size,), generator=generator))
+    return {key: torch.cat(parts).numpy() for key, parts in columns.items()}
+
+
+def _build_synthetic_two_tower(data_cfg: DictConfig, batch_size: int, eval_batch_size: int,
+                               pin_memory: bool, seed: int) -> RecData:
+    """TorchRec's random two-tower workload: a few cached batches, cycled for N iterations.
+
+    ``RandomRecDataset`` pre-generates ``num_generated_batches`` (default 10) batches and
+    cycles through them, so a 100-iteration run sees the same 320 samples ten times.  The
+    training batches are replayed in that order (no shuffling); the held-out set is drawn
+    with another seed.  Nothing is read from disk.
+    """
+
+    distributed = int(os.environ.get("WORLD_SIZE", "1")) > 1
+    num_embeddings = int(data_cfg.get("num_embeddings", 1024 ** 2))
+    cached = int(data_cfg.get("num_generated_batches", 10))
+    iterations = int(data_cfg.get("num_iterations", 100))
+    eval_batches = int(data_cfg.get("eval_batches", 10))
+    pool = _random_rec_batches(num_embeddings, batch_size, cached, seed)
+    order = np.concatenate([np.arange(batch_size) + (i % cached) * batch_size for i in range(iterations)])
+    held_out = _random_rec_batches(num_embeddings, batch_size, eval_batches, seed + 1)
+    meta = {"name": "torchrec-random-two-tower", "task": "synthetic_two_tower", "num_embeddings": num_embeddings,
+            "batch_size": batch_size, "num_generated_batches": cached, "num_iterations": iterations,
+            "eval_batches": eval_batches, "seed": seed}
+    return RecData(
+        meta=meta,
+        train=batch_loader(BatchIndexDataset({key: value[order] for key, value in pool.items()}),
+                           batch_size, False, pin_memory, 0, seed, distributed),
+        validation=batch_loader(BatchIndexDataset(pool), eval_batch_size, False, pin_memory),
+        test=batch_loader(BatchIndexDataset(held_out), eval_batch_size, False, pin_memory),
+    )
+
+
 def build_rec_data(task: str, data_cfg: DictConfig, batch_size: int, eval_batch_size: int,
                    pin_memory: bool, seed: int) -> RecData:
+    if task == "synthetic_two_tower":
+        return _build_synthetic_two_tower(data_cfg, batch_size, eval_batch_size, pin_memory, seed)
     path = str(data_cfg.path)
     meta = load_meta(path)
     distributed = int(os.environ.get("WORLD_SIZE", "1")) > 1

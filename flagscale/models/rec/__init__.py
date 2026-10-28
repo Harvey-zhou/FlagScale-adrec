@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Native recommendation models (SASRec, DSSM, LightGCN) used by examples/rec."""
+"""Native recommendation models (SASRec, DSSM, LightGCN, TorchRec two-tower) used by examples/rec."""
 
 from .base import RecModel, unwrap_model
 from .dssm import DSSM
 from .lightgcn import LightGCN
 from .registry import REC_MODEL_REGISTRY, build_rec_model, register_rec_model
 from .sasrec import SASRec
+from .two_tower import TwoTower
 
 __all__ = [
     "DSSM",
@@ -26,6 +27,7 @@ __all__ = [
     "REC_MODEL_REGISTRY",
     "RecModel",
     "SASRec",
+    "TwoTower",
     "build_rec_model",
     "register_rec_model",
     "unwrap_model",
