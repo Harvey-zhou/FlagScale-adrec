@@ -12,6 +12,9 @@ published, downloadable benchmark result; see [EVIDENCE.md](EVIDENCE.md).
 | `deepfm` | DeepFM (FuxiCTR v1.1.0) | BARS Criteo_x1 | BARS test AUC 0.8137 / logloss 0.4381 |
 | `dcn_mix` | DCN-V2 + mixture of low-rank experts (FuxiCTR v1.1.0) | BARS Criteo_x1 | BARS DCN-V2 AUC 0.8142; paper Mix vs V2 -0.0003 |
 
+Runs of the paper-protocol configs are recorded in [results/](results/README.md),
+with their settings, curves and final numbers.
+
 Layout (independent of the retrieval and recommendation modules):
 
 * `flagscale/models/ads/`: `din.py`, `deepfm.py`, `dcn_mix.py`, shared layers

@@ -1,0 +1,17 @@
+# Advertising training results
+
+One Markdown file per run, same structure everywhere: run metadata, the settings
+that were actually used, the training curve, the final numbers against the
+paper/code target, protocol notes, artifacts and the reproduction command.
+
+Protocols (why each value is what it is) live in
+[../DIN_PAPER_PROTOCOL.md](../DIN_PAPER_PROTOCOL.md); the underlying raw data is
+the `metrics.json` / `history.json` next to each checkpoint.
+
+| Run | Dataset | Status | Result |
+| --- | --- | --- | --- |
+| [DIN paper protocol](din_paper_amazonelectronics_x1.md) | Amazon Electronics_x1 | running (16/50 epochs) | best gAUC 0.8555 so far (paper 0.8818) |
+| DIN + Dice paper protocol | Amazon Electronics_x1 | not started | target 0.8871 |
+
+The BARS/FuxiCTR configs (`din.yaml`, `deepfm.yaml`, `dcn_mix.yaml`) are covered
+by `EVIDENCE.md`; this directory records the paper-protocol runs.

@@ -15,6 +15,9 @@ framework whose result it is compared with; see [EVIDENCE.md](EVIDENCE.md).
 | `sasrec_beauty`, `sasrec_games`, `sasrec_steam` | SASRec | Amazon Beauty, Amazon Games, Steam (leave-one-out, 100 sampled negatives) | paper HR@10 0.4854 / 0.7410 / 0.8729 |
 | `two_tower` | TorchRec `examples/retrieval` two-tower | random data in the MovieLens-20M format | none (random data); see EVIDENCE.md |
 
+Runs of the paper-protocol configs are recorded in [results/](results/README.md),
+with their settings, curves and final numbers.
+
 `two_tower` replaces `dssm` in the six-model set; `dssm` remains available.
 
 Layout (independent of the retrieval and advertising modules):
