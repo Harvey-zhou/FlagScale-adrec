@@ -111,3 +111,13 @@ still hold shorter sequences (11,978 users of Beauty have fewer than 5).  As in 
 only used for training.  `prepare_sasrec_txt.py --train-negatives train` makes the training
 sampler exclude only the training items, as the reference sampler does (the default `all`
 matches `prepare_movielens_sasrec.py`).
+
+## Paper protocols (SASRec, LightGCN)
+
+`sasrec_paper` and `lightgcn_paper` follow the papers rather than the reference-code
+defaults.  SASRec adds the paper's own rule (stop when validation has not improved for 20
+epochs) and validates every epoch; LightGCN uses the paper's batch 1024, Xavier initialisation
+and λ = 1e-4.  The LightGCN paper's validation-based early stop (NGCF's "50 epochs without
+improvement") cannot be reproduced on the distributed train/test split, which has no
+validation file; the released code also trains the full 1000 epochs.  All settings, sources
+and the measured cost of each choice are in [PAPER_PROTOCOLS.md](PAPER_PROTOCOLS.md).

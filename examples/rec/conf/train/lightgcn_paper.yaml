@@ -1,0 +1,40 @@
+# LightGCN paper protocol -- He et al., SIGIR 2020 (arXiv:2002.02126v4) -- Gowalla.
+#
+# Not the same as `lightgcn.yaml` (authors' code defaults, batch 2048, N(0,0.1)
+# init).  This one follows the paper's stated settings.  Tags:
+#   [paper] stated in the paper and must not change for a paper run
+#   [code]  not in the paper, taken from gusye1234/LightGCN-PyTorch or kuandeng/LightGCN
+#   [ours]  neither specifies it; a documented free choice
+#
+# Paper target (Table 3, 3 layers): recall@20 0.1823, ndcg@20 0.1555.
+name: lightgcn_paper
+task: graph
+seed: 2020                      # [code] LightGCN-PyTorch default
+batch_size: 1024                # [paper 4.1.2] "default mini-batch size of 1024"
+epochs: 1000                    # [paper 4.1.2] "typically, 1000 epochs are sufficient"
+eval_every: 20                  # [paper Fig. 3 / code] test recall recorded every 20 epochs
+early_stop_patience: 0          # [ours] the paper's validation-based early stop cannot be
+                                #        reproduced on the released train/test split; the
+                                #        authors' code also trains the full 1000 epochs.
+                                #        See examples/rec/PAPER_PROTOCOLS.md.
+select_metric: recall@20        # [paper 4.1] recall@20 / ndcg@20, all-ranking
+topk: [20]
+log_every: 0
+output_dir: ${experiment.exp_dir}/checkpoint
+
+model:
+  model_type: lightgcn
+  torch_dtype: fp32             # [ours]
+  embedding_dim: 64             # [paper 4.1.2] "embedding size is fixed to 64"
+  num_layers: 3                 # [paper 4.1.2 / Table 3] K=3
+  propagation: index_add        # [ours] same Eq. (7) math; the vendor runtime has no
+                                #        tested sparse COO path (see EVIDENCE.md)
+  init: xavier                  # [paper 4.1.2] Xavier; the code uses N(0, 0.1)
+
+data:
+  path: ${oc.env:FLAGOS_REC_DATA,/flagos-rec/datasets}/gowalla_lightgcn
+
+optimizer:
+  lr: 1.0e-3                    # [paper 4.1.2] "default learning rate of 0.001"
+  weight_decay: 0.0             # [paper] Adam weight decay is not used; L2 is on the embeddings
+  bpr_weight_decay: 1.0e-4      # [paper 4.5] optimal lambda for Gowalla (Eq. 15)

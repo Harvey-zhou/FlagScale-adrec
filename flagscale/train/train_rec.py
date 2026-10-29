@@ -24,13 +24,16 @@ Each task reproduces the protocol of its reference implementation:
 
 * ``sequential`` (SASRec): validation every ``eval_every`` epochs on the
   second-to-last item, best validation epoch restored for the test item,
-  HR/NDCG over 1 positive + 100 sampled negatives (kang205/SASRec).
+  HR/NDCG over 1 positive + 100 sampled negatives (kang205/SASRec).  With
+  ``early_stop_patience`` > 0 training stops after that many consecutive
+  evaluations without a ``select_metric`` improvement (paper IV-B: 20).
 * ``two_tower`` (DSSM): fixed number of epochs, then exact full-catalogue
   retrieval for each user's last item (torch-rechub run_ml_dssm.py).
 * ``graph`` (LightGCN): fixed number of epochs with the test split evaluated
   every ``eval_every`` epochs, Recall/NDCG@20 over all items with training
   items masked (gusye1234/LightGCN-PyTorch).  The final-epoch result is the
-  headline number; the best evaluated epoch is reported separately.
+  headline number; the best evaluated epoch is reported separately.  Setting
+  ``early_stop_patience`` > 0 instead restores the best monitored epoch.
 """
 
 from __future__ import annotations
@@ -400,6 +403,10 @@ def train(config: DictConfig) -> None:
     history: list[dict[str, Any]] = []
     best: dict[str, Any] = {"epoch": 0, "value": float("-inf"), "state": None, "metrics": None}
     last_eval: dict[str, float] | None = None
+    early_stop_patience = int(train_cfg.get("early_stop_patience", 0))
+    early_stop_min_delta = float(train_cfg.get("early_stop_min_delta", 0.0))
+    stopping = 0
+    stopped_early = False
     started = time.time()
     for epoch in range(1, epochs + 1):
         if task == "graph":
@@ -408,6 +415,7 @@ def train(config: DictConfig) -> None:
         record: dict[str, Any] = {"epoch": epoch, "train": stats}
         logger.log({"train/loss": stats["loss"], "train/samples_per_s": stats["samples_per_s"],
                     "train/epoch_time_s": stats["elapsed_s"]}, step=epoch)
+        stop = torch.zeros(1, dtype=torch.float32)
         if rank_zero() and (epoch % eval_every == 0 or epoch == epochs):
             # Sequential selects on validation; the other references monitor
             # their test split during training and have no validation split.
@@ -417,17 +425,44 @@ def train(config: DictConfig) -> None:
             last_eval = result
             logger.log({f"{split}/{k}": v for k, v in result.items()}, step=epoch)
             value = float(result[select_metric])
-            if value > best["value"]:
-                state = None
-                if task == "sequential":
-                    state = copy.deepcopy({k: v.detach().cpu() for k, v in base_model.state_dict().items()})
+            if value > best["value"] + early_stop_min_delta:
+                stopping = 0
+                state = copy.deepcopy({k: v.detach().cpu() for k, v in base_model.state_dict().items()})
                 best = {"epoch": epoch, "value": value, "state": state, "metrics": result}
+                # Keep the best-so-far checkpoint on disk: these runs are long
+                # and an interruption must not throw the best model away.
+                base_model.save(output_dir)
+                log(f"new best {select_metric}={value:.4f} at epoch {epoch}; checkpoint saved")
+            else:
+                stopping += 1
+                if early_stop_patience > 0:
+                    log(f"no improvement in {select_metric} for {stopping} evaluation(s) "
+                        f"(patience {early_stop_patience})")
+                if early_stop_patience > 0 and stopping >= early_stop_patience:
+                    stop[0] = 1.0
             log(f"epoch={epoch}/{epochs} loss={stats['loss']:.6f} samples_per_s={stats['samples_per_s']:.0f} "
                 f"{split}: {fmt(result)}")
         else:
             log(f"epoch={epoch}/{epochs} loss={stats['loss']:.6f} samples_per_s={stats['samples_per_s']:.0f}")
         history.append(record)
+        if rank_zero():
+            # Incremental history, written via rename so an interruption cannot
+            # leave a truncated file behind.
+            output_dir.mkdir(parents=True, exist_ok=True)
+            temporary = output_dir / "history.json.tmp"
+            with temporary.open("w", encoding="utf-8") as file:
+                json.dump(history, file, indent=2)
+            temporary.replace(output_dir / "history.json")
+        if dist.is_available() and dist.is_initialized():
+            shared = stop.to(device)
+            dist.broadcast(shared, src=0)
+            stop = shared.cpu()
         barrier()
+        if stop.item() > 0:
+            log(f"early stop at epoch {epoch} (no {select_metric} improvement for "
+                f"{early_stop_patience} evaluations)")
+            stopped_early = True
+            break
 
     if rank_zero():
         if task == "sequential":
@@ -435,6 +470,12 @@ def train(config: DictConfig) -> None:
             final = evaluate("test")
             headline = {"protocol": "best validation epoch restored, then test", "best_epoch": best["epoch"],
                         "validation": best["metrics"], "test": final}
+        elif early_stop_patience > 0:
+            base_model.load_state_dict(best["state"])
+            final = evaluate("test")
+            headline = {"protocol": f"best monitored epoch restored after a {early_stop_patience}-evaluation "
+                                    "patience", "best_epoch": best["epoch"],
+                        "best_evaluated_test": best["metrics"], "test": final}
         else:
             final = last_eval
             headline = {"protocol": "test after the last epoch (reference protocol)", "test": final,
@@ -446,6 +487,14 @@ def train(config: DictConfig) -> None:
             "model": str(model_cfg.model_type), "task": task, "dataset": data.meta.get("name"),
             "device": str(device), "device_type": device_type, "world_size": world_size,
             "torch_version": torch.__version__, "parameters": parameters, "select_metric": select_metric,
+            "epochs": epochs, "epochs_run": len(history), "eval_every": eval_every,
+            "stopped_early": stopped_early, "early_stop_patience": early_stop_patience,
+            "batch_size": int(train_cfg.batch_size),
+            "optimizer": {"name": "adam" if not hasattr(base_model, "configure_optimizer") else "model-specific",
+                          "lr": float(optim_cfg.lr),
+                          "betas": [float(b) for b in optim_cfg.get("betas", [0.9, 0.999])],
+                          "weight_decay": float(optim_cfg.get("weight_decay", 0.0)),
+                          "bpr_weight_decay": bpr_decay},
             **headline,
             "train_samples_per_s_median": float(np.median(rates)),
             "elapsed_s": time.time() - started, "history": history,

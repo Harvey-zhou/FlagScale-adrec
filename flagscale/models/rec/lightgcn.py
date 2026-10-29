@@ -57,8 +57,18 @@ class LightGCN(RecModel):
             raise ValueError(f"Unsupported propagation {self.propagation!r}")
         self.embedding_user = nn.Embedding(self.n_users, self.dim)
         self.embedding_item = nn.Embedding(self.n_items, self.dim)
-        nn.init.normal_(self.embedding_user.weight, std=0.1)
-        nn.init.normal_(self.embedding_item.weight, std=0.1)
+        # The paper (§4.1.2) uses the Xavier initializer (Glorot & Bengio);
+        # the released PyTorch code switched to N(0, 0.1).  Keep the code
+        # default for the BARS-compatible configs and allow the paper value.
+        self.init = str(model_cfg.get("init", "normal")).lower()
+        if self.init == "xavier":
+            nn.init.xavier_uniform_(self.embedding_user.weight)
+            nn.init.xavier_uniform_(self.embedding_item.weight)
+        elif self.init == "normal":
+            nn.init.normal_(self.embedding_user.weight, std=0.1)
+            nn.init.normal_(self.embedding_item.weight, std=0.1)
+        else:
+            raise ValueError(f"Unsupported init {self.init!r}; use 'normal' or 'xavier'")
         # Edge list of the normalized adjacency, filled by ``set_graph``.
         self.register_buffer("edge_src", torch.zeros(0, dtype=torch.long), persistent=False)
         self.register_buffer("edge_dst", torch.zeros(0, dtype=torch.long), persistent=False)

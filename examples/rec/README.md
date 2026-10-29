@@ -7,8 +7,10 @@ framework whose result it is compared with; see [EVIDENCE.md](EVIDENCE.md).
 | Config | Model | Data | Reference |
 | --- | --- | --- | --- |
 | `sasrec` | SASRec (kang205/SASRec protocol) | MovieLens-1M, 5-core, leave-one-out, 100 sampled negatives | paper HR@10 0.8245 / NDCG@10 0.5905 |
+| `sasrec_paper` | SASRec, ICDM'18 paper protocol (early stopping, per-epoch validation) | MovieLens-1M | paper 0.8245 / 0.5905 — see [PAPER_PROTOCOLS.md](PAPER_PROTOCOLS.md) |
 | `dssm` | DSSM two-tower (torch-rechub) | MovieLens-1M, last item per user, full-catalogue retrieval | torch-rechub Hit@100 14.74% |
 | `lightgcn` | LightGCN (gusye1234/LightGCN-PyTorch) | Gowalla (official split) | paper recall@20 0.1823 / ndcg@20 0.1555 |
+| `lightgcn_paper` | LightGCN, SIGIR'20 paper protocol (batch 1024, Xavier, λ=1e-4) | Gowalla (official split) | paper 0.1823 / 0.1555 — see [PAPER_PROTOCOLS.md](PAPER_PROTOCOLS.md) |
 | `lightgcn_yelp2018`, `lightgcn_amazon_book` | LightGCN | Yelp2018, Amazon-Book (official split) | paper recall@20 0.0639 / 0.0410 |
 | `sasrec_beauty`, `sasrec_games`, `sasrec_steam` | SASRec | Amazon Beauty, Amazon Games, Steam (leave-one-out, 100 sampled negatives) | paper HR@10 0.4854 / 0.7410 / 0.8729 |
 | `two_tower` | TorchRec `examples/retrieval` two-tower | random data in the MovieLens-20M format | none (random data); see EVIDENCE.md |
@@ -20,6 +22,9 @@ Layout (independent of the retrieval and advertising modules):
 * `flagscale/models/rec/`: `sasrec.py`, `dssm.py`, `lightgcn.py`, `two_tower.py`, shared layers, registry;
 * `flagscale/train/datasets/rec.py`, `losses/rec.py`, `metrics/rec.py`;
 * `flagscale/train/train_rec.py`: per-task protocol (see its docstring);
+  `early_stop_patience` stops after that many consecutive evaluations without a
+  `select_metric` improvement and restores the best monitored epoch (SASRec uses
+  the paper's 20);
 * data under `$FLAGOS_REC_DATA` (default `/flagos-rec/datasets`), results under
   `$FLAGOS_REC_CKPTS` (default `/flagos-rec/ckpts`).
 

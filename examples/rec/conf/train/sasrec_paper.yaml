@@ -1,0 +1,40 @@
+# SASRec paper protocol -- Kang & McAuley, ICDM 2018 (arXiv:1808.09781v1) -- MovieLens-1M.
+#
+# Not the same as `sasrec.yaml` (authors' code defaults, fixed 200 epochs, no
+# early stopping).  This one follows the paper's training rules.  Tags:
+#   [paper] stated in the paper and must not change for a paper run
+#   [code]  not in the paper, taken from kang205/SASRec (or its PyTorch port)
+#   [ours]  neither specifies it; a documented free choice
+#
+# Paper target (Table III, ML-1M): Hit@10 0.8245, NDCG@10 0.5905.
+name: sasrec_paper
+task: sequential
+seed: 42                        # [code] kang205 default
+batch_size: 128                 # [paper IV-C] "batch size is 128"
+eval_batch_size: 1024           # [ours] evaluation only
+epochs: 1000                    # [ours] safety cap; the paper has no epoch count
+eval_every: 1                   # [ours] the paper's patience is counted in epochs
+early_stop_patience: 20         # [paper IV-B] stop if validation does not improve for 20 epochs
+early_stop_min_delta: 0.0
+select_metric: ndcg@10          # [paper IV-D] HR@10 is reported alongside
+log_every: 0
+output_dir: ${experiment.exp_dir}/checkpoint
+
+model:
+  model_type: sasrec
+  torch_dtype: fp32             # [ours] the paper does not mention mixed precision
+  hidden_size: 50               # [code] d=50 (the paper's Fig. 2 notes d>=40 is satisfactory)
+  num_blocks: 2                 # [paper IV-C] "we use two self-attention blocks"
+  num_heads: 1                  # [paper IV-F] one head; two heads was worse
+  dropout: 0.2                  # [paper IV-C] 0.2 for MovieLens-1m
+
+data:
+  path: ${oc.env:FLAGOS_REC_DATA,/flagos-rec/datasets}/movielens_1m_sasrec
+  num_workers: 2
+  max_samples: null
+  eval_max_samples: null
+
+optimizer:
+  lr: 1.0e-3                    # [paper IV-C] "learning rate is 0.001"
+  betas: [0.9, 0.98]            # [code] kang205 main.py AdamOptimizer(beta2=0.98)
+  weight_decay: 0.0             # [paper/code] no L2 ("l2_flag = 0")
