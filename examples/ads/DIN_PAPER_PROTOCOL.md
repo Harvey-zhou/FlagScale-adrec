@@ -137,6 +137,15 @@ multiplies the rate by 0.1 and `early_stop_patience` counts epochs.
    Amazon and the released code has no regulariser.
 6. **Number of runs.**  The paper averages 5 runs and notes the initialisation
    affects AUC by less than 0.0002.  We run one seed (1234).
+7. **PReLU initial slope.**  Slopes start at 0 (`nn.PReLU(width, init=0.0)`, so
+   the unit begins as a plain ReLU), following the form of paper Eq. (8).  PyTorch's
+   default is 0.25.  The released code has no PReLU to copy (both MLPs use
+   `sigmoid`); only its Dice `alpha` starts at 0.
+8. **Single card only.**  The step schedule counts optimizer steps per process.
+   Under DDP each rank reaches step 336,000 after consuming `world_size` times
+   the samples of a single card, so the learning-rate drop comes later than in
+   the single-card protocol.  Batch 32 is a single-card setting; do not use
+   `din_paper*` with more than one card.
 
 ## 6. How to run
 

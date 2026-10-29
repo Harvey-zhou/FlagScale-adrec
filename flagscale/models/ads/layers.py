@@ -45,7 +45,7 @@ def _activation(name: str, width: int, epsilon: float = 1e-9) -> nn.Module:
         return Dice(width, eps=epsilon)
     if name == "prelu":
         # DIN paper Eq. (8): one learnable slope per unit, initialised to 0.
-        return nn.PReLU(width)
+        return nn.PReLU(width, init=0.0)
     if name == "relu":
         return nn.ReLU()
     if name == "sigmoid":
