@@ -41,11 +41,13 @@ from .registry import register_ads_model
 class DINAttention(nn.Module):
     """FuxiCTR ``DIN_Attention``."""
 
-    def __init__(self, dim: int, hidden: list[int], activation: str, dropout: float, use_softmax: bool) -> None:
+    def __init__(self, dim: int, hidden: list[int], activation: str, dropout: float, use_softmax: bool,
+                 activation_epsilon: float = 1e-9) -> None:
         super().__init__()
         self.dim = dim
         self.use_softmax = use_softmax
-        self.attention_layer = MLPBlock(4 * dim, hidden, activation, dropout, batch_norm=False, output_dim=1)
+        self.attention_layer = MLPBlock(4 * dim, hidden, activation, dropout, batch_norm=False, output_dim=1,
+                                        activation_epsilon=activation_epsilon)
 
     def forward(self, target: torch.Tensor, sequence: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         length = sequence.size(1)
@@ -75,6 +77,7 @@ class DIN(AdsModel):
             str(model_cfg.get("attention_hidden_activations", "dice")),
             float(model_cfg.get("attention_dropout", 0.1)),
             bool(model_cfg.get("din_use_softmax", True)),
+            float(model_cfg.get("activation_epsilon", 1e-9)),
         )
         self.dnn = MLPBlock(
             4 * dim,
@@ -83,6 +86,7 @@ class DIN(AdsModel):
             float(model_cfg.get("net_dropout", 0.1)),
             batch_norm=bool(model_cfg.get("batch_norm", True)),
             output_dim=1,
+            activation_epsilon=float(model_cfg.get("activation_epsilon", 1e-9)),
         )
         self.reset_parameters()
 

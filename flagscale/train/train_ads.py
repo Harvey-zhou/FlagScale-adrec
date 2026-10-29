@@ -20,16 +20,23 @@ starts this module with ``--config-file``, and the device is selected through
 the platform interface, so native CUDA and Torch-FL differ only in a
 launch-time override.
 
-The loop reproduces FuxiCTR's BaseModel fit used by the BARS benchmarks:
+The loop supports two protocols, selected by ``optimizer.name`` /
+``optimizer.scheduler.type`` in the config:
 
-* Adam; loss = BCE + ``embedding_regularizer / 2 * ||W_emb||^2``;
-* gradient norm clipped to 10;
-* after every epoch the validation split is scored; when the monitored metric
-  does not improve by 1e-6 the learning rate is multiplied by 0.1 (floor
-  1e-6) and a patience counter increases, otherwise the counter resets and
-  the weights are kept as the best checkpoint;
-* training stops when the counter reaches ``early_stop_patience``; the best
-  checkpoint is restored and scored on the test split.
+* ``scheduler.type: plateau`` (default) reproduces FuxiCTR's BaseModel fit used
+  by the BARS benchmarks: Adam; loss = BCE + ``embedding_regularizer / 2 *
+  ||W_emb||^2``; gradient norm clipped to 10; after every epoch the validation
+  split is scored, a non-improvement (< 1e-6) multiplies the learning rate by
+  0.1 and increases a patience counter, and training stops when the counter
+  reaches ``early_stop_patience``.
+* ``scheduler.type: step`` (or ``none`` / ``exponential``) runs a fixed
+  schedule instead: the learning rate is ``lr * gamma ** (step //
+  step_size_steps)`` with optional linear ``warmup_steps``; the monitored
+  metric still selects the best checkpoint, but it never changes the learning
+  rate. Set ``early_stop_patience: 0`` to run every configured epoch.
+
+In both cases the best checkpoint by the monitored split is restored and
+scored on the test split.
 """
 
 from __future__ import annotations
@@ -224,7 +231,8 @@ class ExperimentLogger:
 
 def train_epoch(model: nn.Module, loader, epoch: int, device: torch.device, optimizer: torch.optim.Optimizer,
                 embedding_parameters: list[nn.Parameter], embedding_regularizer: float, max_grad_norm: float,
-                dtype_name: str, platform: Any, log_every: int) -> dict[str, float]:
+                dtype_name: str, platform: Any, log_every: int,
+                schedule: "LRSchedule | None" = None, start_step: int = 0) -> dict[str, float]:
     model.train()
     sampler = getattr(loader.sampler, "sampler", loader.sampler)
     if hasattr(sampler, "set_epoch"):
@@ -235,6 +243,10 @@ def train_epoch(model: nn.Module, loader, epoch: int, device: torch.device, opti
     started = time.perf_counter()
     for batch in loader:
         samples += int(batch["label"].shape[0])
+        if schedule is not None:
+            learning_rate = schedule.lr_at(start_step + steps)
+            for group in optimizer.param_groups:
+                group["lr"] = learning_rate
         with autocast_context(device, dtype_name, platform):
             loss = ctr_loss(model, batch, device, embedding_parameters, embedding_regularizer)
         optimizer.zero_grad(set_to_none=True)
@@ -246,14 +258,16 @@ def train_epoch(model: nn.Module, loader, epoch: int, device: torch.device, opti
         total = detached if total is None else total + detached
         steps += 1
         if log_every > 0 and steps % log_every == 0:
-            log(f"epoch={epoch} step={steps} running_loss={float(total.item()) / steps:.6f}")
+            log(f"epoch={epoch} step={steps} lr={optimizer.param_groups[0]['lr']:.6g} "
+                f"running_loss={float(total.item()) / steps:.6f}")
     if steps == 0:
         raise RuntimeError("Training dataset is empty for this rank")
     local_loss = float(total.item())
     elapsed = time.perf_counter() - started
     loss_sum, step_sum, sample_sum = all_reduce_sum([local_loss, float(steps), float(samples)], device)
     return {"loss": loss_sum / max(step_sum, 1.0), "steps": steps, "elapsed_s": elapsed,
-            "samples_per_s": sample_sum / max(elapsed, 1e-9)}
+            "samples_per_s": sample_sum / max(elapsed, 1e-9), "end_step": start_step + steps,
+            "end_lr": optimizer.param_groups[0]["lr"]}
 
 
 @torch.no_grad()
@@ -276,6 +290,61 @@ def evaluate(model: nn.Module, loader, device: torch.device, dtype_name: str, pl
 
 def fmt(metrics: dict[str, float]) -> str:
     return " ".join(f"{k}={v:.6f}" for k, v in metrics.items() if k != "elapsed_s")
+
+
+def make_optimizer(model: nn.Module, optim_cfg: DictConfig) -> torch.optim.Optimizer:
+    """Adam (FuxiCTR default) or plain SGD with optional momentum/weight decay."""
+
+    name = str(optim_cfg.get("name", "adam")).lower()
+    lr = float(optim_cfg.get("lr", 1e-3))
+    weight_decay = float(optim_cfg.get("weight_decay", 0.0))
+    if name == "adam":
+        return torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    if name == "sgd":
+        return torch.optim.SGD(
+            model.parameters(), lr=lr, momentum=float(optim_cfg.get("momentum", 0.0)),
+            weight_decay=weight_decay, nesterov=bool(optim_cfg.get("nesterov", False)))
+    raise ValueError(f"Unsupported optimizer {name!r}; use 'adam' or 'sgd'")
+
+
+class LRSchedule:
+    """Step / exponential / constant schedule, optionally with linear warmup.
+
+    ``step`` multiplies the learning rate by ``gamma`` every
+    ``step_size_steps`` optimizer steps, which is how the DIN authors' released
+    code drops 1.0 -> 0.1 at 336,000 steps.  ``exponential`` multiplies it by
+    ``gamma`` once per epoch.  ``plateau`` is not scheduled here: the epoch loop
+    keeps FuxiCTR's non-improvement decay for that mode.
+    """
+
+    def __init__(self, scheduler_cfg: DictConfig | None, base_lr: float) -> None:
+        scheduler_cfg = scheduler_cfg or {}
+        self.type = str(scheduler_cfg.get("type", "plateau")).lower()
+        if self.type not in {"plateau", "none", "step", "exponential"}:
+            raise ValueError(f"Unsupported scheduler {self.type!r}")
+        self.gamma = float(scheduler_cfg.get("gamma", 0.1))
+        self.step_size = int(scheduler_cfg.get("step_size_steps", 0) or 0)
+        self.warmup = int(scheduler_cfg.get("warmup_steps", 0) or 0)
+        self.min_lr = float(scheduler_cfg.get("min_lr", 0.0) or 0.0)
+        self.base_lr = float(base_lr)
+        if self.type == "step" and self.step_size <= 0:
+            raise ValueError("scheduler.type=step needs a positive step_size_steps")
+
+    def lr_at(self, step: int) -> float:
+        """Learning rate for the next optimizer step (``step`` = steps done so far)."""
+
+        multiplier = 1.0
+        if self.warmup > 0 and step < self.warmup:
+            multiplier = (step + 1) / self.warmup
+        elif self.type == "step":
+            multiplier = self.gamma ** ((step - self.warmup) // self.step_size)
+        lr = self.base_lr * multiplier
+        return max(lr, self.min_lr) if self.min_lr > 0 else lr
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"type": self.type, "gamma": self.gamma, "step_size_steps": self.step_size,
+                "warmup_steps": self.warmup, "min_lr": self.min_lr, "base_lr": self.base_lr}
+
 
 
 def train(config: DictConfig) -> None:
@@ -301,7 +370,17 @@ def train(config: DictConfig) -> None:
         model = DDP(model, device_ids=[device.index] if device_type == "cuda" else None)
 
     optim_cfg = train_cfg.optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=float(optim_cfg.lr))
+    optimizer = make_optimizer(model, optim_cfg)
+    scheduler_cfg = train_cfg.get("scheduler")
+    if scheduler_cfg is None:
+        scheduler_cfg = optim_cfg.get("scheduler")
+    schedule = LRSchedule(scheduler_cfg, float(optim_cfg.lr))
+    fixed_schedule = schedule.type != "plateau"
+    if fixed_schedule and schedule.warmup == 0:
+        # No warmup: the schedule owns the learning rate from the first step, so
+        # an optimizer constructed with a different lr cannot leak in.
+        for group in optimizer.param_groups:
+            group["lr"] = schedule.lr_at(0)
     embedding_regularizer = float(optim_cfg.get("embedding_regularizer", 0.0))
     max_grad_norm = float(optim_cfg.get("max_gradient_norm", 10.0))
     epochs = int(train_cfg.get("epochs", 100))
@@ -315,11 +394,16 @@ def train(config: DictConfig) -> None:
     history: list[dict[str, Any]] = []
     best: dict[str, Any] = {"epoch": 0, "value": float("-inf"), "state": None, "valid": None}
     stopping_steps = 0
+    global_step = 0
     started = time.time()
     for epoch in range(1, epochs + 1):
+        epoch_start_lr = float(optimizer.param_groups[0]["lr"])
         stats = train_epoch(model, train_loader, epoch, device, optimizer, embedding_parameters,
-                            embedding_regularizer, max_grad_norm, dtype_name, platform, log_every)
-        record: dict[str, Any] = {"epoch": epoch, "train": stats, "lr": optimizer.param_groups[0]["lr"]}
+                            embedding_regularizer, max_grad_norm, dtype_name, platform, log_every,
+                            schedule if fixed_schedule else None, global_step)
+        global_step = int(stats["end_step"])
+        record: dict[str, Any] = {"epoch": epoch, "train": stats, "lr": epoch_start_lr,
+                                  "end_lr": stats["end_lr"], "global_step": global_step}
         # [stop flag, reduce-lr flag] decided on rank zero and shared.  The new learning
         # rate is derived on every rank from the flag, so no float64 value has to be
         # broadcast through the device.
@@ -330,20 +414,25 @@ def train(config: DictConfig) -> None:
             value = float(valid[monitor])
             if value < best["value"] + 1e-6:
                 stopping_steps += 1
-                decision[1] = 1.0
-                next_lr = max(optimizer.param_groups[0]["lr"] * 0.1, 1e-6)
-                log(f"monitor {monitor}={value:.6f} did not improve; lr -> {next_lr:.6g}")
+                if not fixed_schedule:
+                    decision[1] = 1.0
+                    next_lr = max(optimizer.param_groups[0]["lr"] * 0.1, 1e-6)
+                    log(f"monitor {monitor}={value:.6f} did not improve; lr -> {next_lr:.6g}")
             else:
                 stopping_steps = 0
                 best = {"epoch": epoch, "value": value, "valid": valid,
                         "state": copy.deepcopy({k: v.detach().cpu() for k, v in base_model.state_dict().items()})}
-            if stopping_steps >= patience:
+                # Keep the best-so-far checkpoint on disk: a long run that is
+                # interrupted still leaves a usable model behind.
+                base_model.save(output_dir)
+                log(f"new best {monitor}={value:.6f} at epoch {epoch}; checkpoint saved")
+            if patience > 0 and stopping_steps >= patience:
                 decision[0] = 1.0
             logger.log({"train/loss": stats["loss"], "train/samples_per_s": stats["samples_per_s"],
-                        "train/epoch_time_s": stats["elapsed_s"], "train/lr": record["lr"],
+                        "train/epoch_time_s": stats["elapsed_s"], "train/lr": epoch_start_lr,
                         **{f"valid/{k}": v for k, v in valid.items()}}, step=epoch)
             log(f"epoch={epoch} loss={stats['loss']:.6f} samples_per_s={stats['samples_per_s']:.0f} "
-                f"lr={record['lr']:.6g} valid: {fmt(valid)}")
+                f"lr={epoch_start_lr:.6g} step={global_step} valid: {fmt(valid)}")
         if dist.is_available() and dist.is_initialized():
             shared = decision.to(device)
             dist.broadcast(shared, src=0)
@@ -352,9 +441,20 @@ def train(config: DictConfig) -> None:
             for group in optimizer.param_groups:
                 group["lr"] = max(group["lr"] * 0.1, 1e-6)
         history.append(record)
+        if rank_zero():
+            # Incremental history: `metrics.json` is only written once the run
+            # finishes, and these runs are hours long.  Write-then-rename so a
+            # kill in the middle of the dump cannot leave a truncated file.
+            output_dir.mkdir(parents=True, exist_ok=True)
+            temporary = output_dir / "history.json.tmp"
+            with temporary.open("w", encoding="utf-8") as file:
+                json.dump(history, file, indent=2)
+            temporary.replace(output_dir / "history.json")
         if decision[0].item() > 0:
             log(f"early stop at epoch {epoch}")
             break
+        if schedule.type == "exponential":
+            schedule.base_lr *= schedule.gamma
 
     if rank_zero():
         base_model.load_state_dict(best["state"])
@@ -366,6 +466,12 @@ def train(config: DictConfig) -> None:
             "model": str(model_cfg.model_type), "dataset": meta.get("name"), "device": str(device),
             "device_type": device_type, "world_size": world_size, "torch_version": torch.__version__,
             "parameters": parameters, "monitor": monitor, "valid_split": valid_split,
+            "optimizer": {"name": str(optim_cfg.get("name", "adam")), "lr": float(optim_cfg.lr),
+                          "momentum": float(optim_cfg.get("momentum", 0.0)),
+                          "weight_decay": float(optim_cfg.get("weight_decay", 0.0)),
+                          "embedding_regularizer": embedding_regularizer,
+                          "max_gradient_norm": max_grad_norm},
+            "scheduler": schedule.to_dict(),
             "best_epoch": best["epoch"], "valid": best["valid"], "test": test,
             "train_samples_per_s_median": float(np.median(rates)), "elapsed_s": time.time() - started,
             "history": history,

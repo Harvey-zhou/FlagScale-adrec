@@ -7,6 +7,8 @@ published, downloadable benchmark result; see [EVIDENCE.md](EVIDENCE.md).
 | Config | Model | Data | Reference |
 | --- | --- | --- | --- |
 | `din` | DIN (FuxiCTR v2.0.1) | BARS AmazonElectronics_x1 | BARS test gAUC 0.8835 / AUC 0.8860 |
+| `din_paper` | DIN, KDD'18 paper protocol (SGD 1.0, batch 32, PReLU) | AmazonElectronics_x1 | paper 0.8818 — see [DIN_PAPER_PROTOCOL.md](DIN_PAPER_PROTOCOL.md) |
+| `din_paper_dice` | DIN + Dice, paper protocol | AmazonElectronics_x1 | paper 0.8871 — same document |
 | `deepfm` | DeepFM (FuxiCTR v1.1.0) | BARS Criteo_x1 | BARS test AUC 0.8137 / logloss 0.4381 |
 | `dcn_mix` | DCN-V2 + mixture of low-rank experts (FuxiCTR v1.1.0) | BARS Criteo_x1 | BARS DCN-V2 AUC 0.8142; paper Mix vs V2 -0.0003 |
 
@@ -16,7 +18,10 @@ Layout (independent of the retrieval and recommendation modules):
   (Dice, MLPBlock, FieldEmbedding, CrossNetMix), registry;
 * `flagscale/train/datasets/ads.py`, `losses/ads.py`, `metrics/ads.py`;
 * `flagscale/train/train_ads.py`: FuxiCTR training procedure (embedding L2,
-  gradient clipping, reduce-LR-on-plateau, early stopping, best checkpoint);
+  gradient clipping, reduce-LR-on-plateau, early stopping, best checkpoint).
+  `optimizer.name`, `scheduler.*` and `early_stop_patience: 0` switch it to a
+  fixed paper protocol (SGD, step/exponential schedule, warmup, `min_lr`); see
+  [DIN_PAPER_PROTOCOL.md](DIN_PAPER_PROTOCOL.md);
 * data under `$FLAGOS_ADS_DATA` (default `/flagos-ads/datasets`), results under
   `$FLAGOS_ADS_CKPTS` (default `/flagos-ads/ckpts`).
 

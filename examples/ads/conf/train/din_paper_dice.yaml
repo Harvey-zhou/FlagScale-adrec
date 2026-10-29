@@ -1,0 +1,64 @@
+# DIN **with Dice** -- the paper's best Amazon row (Table 3: 0.8871 vs DIN 0.8818).
+# Same protocol as din_paper.yaml; only the activation changes to Dice (paper §5.2, eps 1e-8).
+#
+# This is NOT the BARS/FuxiCTR config (see din.yaml).  It follows the training
+# setup the paper states, and falls back to the authors' released code only for
+# values the paper leaves open.  Every number is tagged below:
+#   [paper §x]  = stated in the paper, must not be changed for a "paper" run
+#   [code]      = authors' released TensorFlow code (DeepInterestNetwork/din)
+#   [ours]      = neither source specifies it; a free choice, documented here
+#
+# Paper target: DIN Amazon(Electro) user-weighted AUC 0.8818, DIN+Dice 0.8871
+# (Table 3).  The authors' README reports gAUC 0.8698 / 0.8711 on their own run.
+name: din_paper_dice
+seed: 1234                      # [code] random/np/tf seeds all 1234
+batch_size: 32                  # [paper §6.1] mini-batch size 32
+eval_batch_size: 8192           # [ours] evaluation only; does not affect training
+epochs: 50                      # [code] fixed 50 epochs, no early-stopping branch
+early_stop_patience: 0          # [ours] 0 disables early stop: the paper gives none,
+                                #        the authors' code runs all 50 epochs
+monitor: gAUC                   # [paper §6.3] user-weighted AUC (Eq. 10)
+log_every: 1000                 # [code] logs/evaluates every 1000 steps; we evaluate per epoch
+output_dir: ${experiment.exp_dir}/checkpoint
+
+model:
+  model_type: din
+  torch_dtype: fp32             # [ours] paper does not mention mixed precision
+  embedding_dim: 64             # [code] item 64 + cate 64 = 128-d target/behaviour vector
+  attention_hidden_units: [80, 40]      # [code] activation-unit MLP
+  attention_hidden_activations: dice    # [paper Table 3] DIN with Dice row
+  attention_dropout: 0.0        # [ours] the paper uses no dropout on Amazon
+  din_use_softmax: false        # [paper §4.3] softmax normalisation is abandoned
+  dnn_hidden_units: [80, 40]    # [code] final MLP
+  dnn_activations: dice         # [paper Table 3] DIN with Dice row
+  net_dropout: 0.0              # [ours] no dropout on Amazon (dropout is an Alibaba ablation)
+  batch_norm: true              # [code] BN after the activation unit and before the MLP
+  activation_epsilon: 1.0e-8    # [paper §5.2] Dice epsilon is 1e-8 in the paper's practice
+
+data:
+  path: ${oc.env:FLAGOS_ADS_DATA,/flagos-ads/datasets}/amazonelectronics_x1
+  # The authors' split has only train/test: train = k=1..n-2, test = predict the
+  # last item (paper §6.1).  The released code selects the best checkpoint on the
+  # test gAUC, so model selection sees the test split; this is disclosed, not a
+  # validation split.
+  valid_split: test
+  group_key: user_id            # gAUC groups (Eq. 10)
+  num_workers: 2
+  max_samples: null
+  eval_max_samples: null
+
+optimizer:
+  name: sgd                     # [paper §6.1] SGD for all models on Amazon/MovieLens
+  lr: 1.0                       # [paper §6.1] learning rate starts at 1
+  momentum: 0.0                 # [code] plain GradientDescentOptimizer
+  weight_decay: 0.0             # [ours] the paper applies MBA (lambda=0.01) only on Alibaba §5.1
+  embedding_regularizer: 0.0    # [ours] same: no embedding L2 on Amazon in paper or code
+  max_gradient_norm: 5.0        # [code] tf.clip_by_global_norm(gradients, 5)
+
+scheduler:
+  type: step                    # [paper §6.1] "SGD with exponential decay, decay rate 0.1"
+  gamma: 0.1                    # [paper §6.1] decay rate 0.1
+  step_size_steps: 336000       # [code] lr 1.0 -> 0.1 at global_step 336000 (~4.1 epochs)
+  min_lr: 0.1                   # [code] the authors' code sets lr = 0.1 (absolute) at that
+                                #        step, so it stays at 0.1 instead of decaying further
+  warmup_steps: 0               # [ours] the paper does not use warmup

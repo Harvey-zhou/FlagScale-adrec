@@ -66,3 +66,12 @@ FuxiCTR `BaseModel` (v1.1.0 `fit_generator` / v2.0.1 `fit`): Adam; loss = BCE
 Xavier-normal; after each epoch the monitored validation metric is checked,
 a non-improvement (< 1e-6) multiplies the learning rate by 0.1 and counts
 towards `patience` = 2; the best checkpoint is restored for the test split.
+
+## DIN paper protocol (not BARS)
+
+`din_paper.yaml` and `din_paper_dice.yaml` follow the KDD'18 paper's training
+setup instead of the BARS one: SGD, learning rate 1.0 dropped to 0.1 at step
+336,000, batch 32, PReLU (Dice for the 0.8871 row), no softmax in the activation
+unit, and no regulariser on Amazon.  The paper's Table 3 targets are 0.8818 and
+0.8871 user-weighted AUC.  Every value, its source and the known paper/code
+conflicts are documented in [DIN_PAPER_PROTOCOL.md](DIN_PAPER_PROTOCOL.md).

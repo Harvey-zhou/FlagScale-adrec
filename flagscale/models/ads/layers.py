@@ -39,10 +39,13 @@ class Dice(nn.Module):
         return p * x + self.alpha * (1 - p) * x
 
 
-def _activation(name: str, width: int) -> nn.Module:
+def _activation(name: str, width: int, epsilon: float = 1e-9) -> nn.Module:
     name = name.lower()
     if name == "dice":
-        return Dice(width)
+        return Dice(width, eps=epsilon)
+    if name == "prelu":
+        # DIN paper Eq. (8): one learnable slope per unit, initialised to 0.
+        return nn.PReLU(width)
     if name == "relu":
         return nn.ReLU()
     if name == "sigmoid":
@@ -58,7 +61,7 @@ class MLPBlock(nn.Module):
     """
 
     def __init__(self, in_dim: int, hidden: Sequence[int], activation: str = "relu", dropout: float = 0.0,
-                 batch_norm: bool = False, output_dim: int | None = None) -> None:
+                 batch_norm: bool = False, output_dim: int | None = None, activation_epsilon: float = 1e-9) -> None:
         super().__init__()
         layers: list[nn.Module] = []
         dim = in_dim
@@ -66,7 +69,7 @@ class MLPBlock(nn.Module):
             layers.append(nn.Linear(dim, width))
             if batch_norm:
                 layers.append(nn.BatchNorm1d(width))
-            layers.append(_activation(activation, width))
+            layers.append(_activation(activation, width, activation_epsilon))
             if dropout > 0:
                 layers.append(nn.Dropout(dropout))
             dim = width
