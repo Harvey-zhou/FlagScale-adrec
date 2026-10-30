@@ -117,21 +117,21 @@ it.
   code assigns `lr = 0.1` once, so the rate stays at 0.1; `min_lr: 0.1` now
   reproduces that.  Up to epoch ~10 both runs are identical (same seed), which is
   why the best number is unchanged — the model overfits after epoch 7 either way.
-* **Gap to the paper — hypotheses, not verified.**  The BARS config reaches
-  0.8835 gAUC on the same data, so the gap is not a dataset problem, but which
-  difference causes it has **not** been isolated by ablation.  Candidates, in
-  the order they are worth testing:
-  (a) embedding initialisation — this repository uses FuxiCTR's N(0, 1e-4)
-      while the authors' `tf.get_variable` tables default to `glorot_uniform`
-      (bound ≈0.0098 for a 63,003×64 table, ~56× the standard deviation of the
-      current init); with SGD at lr 1.0 that is a materially different start and
-      a plausible reason for the early overfitting;
-  (b) PReLU instead of the code's sigmoid;
-  (c) no softmax in the activation unit;
-  (d) SGD 1.0 / batch 32 instead of Adam 5e-4 / batch 1024;
-  (e) MLPs [80, 40] instead of [1024, 512, 256].
-  (a) is being tested first because it is a single-variable change and costs
-  three epochs; see the ablation section below.
+* **Gap to the authors' 0.8698 — candidate causes, none verified.**  Compared
+  with the released TensorFlow model (`din/model.py`), the differences are:
+  (a) it applies `batch_normalization` + `dense(128)` (`hist_bn` / `hist_fcn`)
+      to the pooled history and feeds the MLP `[u, i, u*i]` with a BatchNorm on
+      that concatenation (80-40-1, sigmoid), while this implementation feeds
+      `[candidate, pooled]` into the MLP with BatchNorm after the first linear;
+  (b) every activation is `sigmoid` in the released code, while the paper's
+      Table 3 row uses PReLU;
+  (c) the released attention applies softmax after scaling by `sqrt(d)`, while
+      the paper says normalisation is abandoned.
+  Three candidates are **not** differences: MLP widths (80/40 in both),
+  optimiser (SGD 1.0, batch 32 in both) and user embeddings — `user_emb_w` is
+  declared in `din/model.py` but **never used**, unlike the base model in the
+  same repository.  The embedding initialisation has been tested and ruled out
+  (see the ablations below).
 * **Model selection uses the test split** because the released split has no
   validation set — the authors' `_eval` does the same.  The number is therefore
   best-over-epochs test gAUC, not an untouched held-out score.
@@ -144,28 +144,39 @@ it.
 * 50 epochs took 13 h 46 m (median 905 s/epoch; 2,882 samples/s).  The
   1,300–1,500 s epochs were periods when benchmark jobs shared the host.
 
-## Initialisation ablation
+## Ablations
 
-Three-epoch arms under the same protocol, run in parallel on cards 3 (glorot)
-and 2 (normal control) from 2026-10-30 10:23 / 10:52.  Both use the current
-code, so both start PReLU at 0; the only difference between them is the
-embedding initialiser.
+### Embedding initialisation — ruled out
 
-| Arm | Embedding init | PReLU init | Epoch 1 gAUC | Epoch 1 train loss |
-| --- | --- | --- | --- | --- |
-| original 50-epoch run | N(0, 1e-4) | 0.25 | 0.8245 | 0.5448 |
-| control | N(0, 1e-4) | 0 | 0.8227 | 0.5466 |
-| glorot | glorot_uniform | 0 | 0.8226 | 0.5461 |
+Three epochs each, identical protocol and PReLU init 0; only the embedding-table
+initialiser differs (N(0, 1e-4) vs the authors' TensorFlow default,
+`glorot_uniform`).
 
-**First-epoch evidence does not support hypothesis (a).**  With PReLU held at 0,
-the two embedding initialisers differ by 0.0001 gAUC (and 0.0005 in training
-loss): SGD at lr 1.0 washes the initial scale out within one epoch.  The PReLU
-start (0.25 vs 0) is worth ~0.002 at epoch 1.  Both arms run to 3 epochs; the
-table will be extended with epochs 2–3 and the conclusion updated, but the
-initialisation hypothesis is already unlikely to explain a 0.014–0.026 gap.
+| Epoch | N(0, 1e-4) | glorot_uniform | original 50-epoch run (PReLU 0.25) |
+| --- | --- | --- | --- |
+| 1 | 0.8227 | 0.8226 | 0.8245 |
+| 2 | 0.8334 | 0.8338 | 0.8344 |
+| 3 | 0.8400 | 0.8420 | 0.8400 |
 
-Outputs: `/data2/jiangxuhui/logs/ads-din-glorot/` and
-`/data2/jiangxuhui/logs/ads-din-ctrl/`.
+The two initialisers stay within 0.002 over three epochs and both sit on the
+original curve; the PReLU start (0.25 vs 0) accounts for ~0.002 at epoch 1.
+SGD at lr 1.0 washes out a 56× scale difference within the first epoch, so this
+hypothesis does not explain the 0.014 gap.  Outputs: `ads-din-ctrl/`,
+`ads-din-glorot/` (outside the repository).
+
+### Model structure and activation — running
+
+Two 3-epoch arms started 2026-10-30 14:25, when the initialisation arms freed
+cards 2 and 3:
+
+* `din_paper_sigmoid` — only the activation changes (attention and MLP to
+  sigmoid, softmax still off), isolating (b);
+* `din_paper_author` — the released model's whole cluster: sigmoid, softmax on,
+  `hist_fcn`, `[u, i, u*i]` input and BatchNorm on that input.
+
+`din.py` now exposes `model.hist_fcn`, `model.dnn_input` and `model.input_bn`
+for these arms; all default to the paper structure, so `din.yaml` and the
+50-epoch run are unaffected.  Results will be appended here.
 
 ## Artifacts
 

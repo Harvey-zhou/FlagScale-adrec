@@ -79,8 +79,25 @@ class DIN(AdsModel):
             bool(model_cfg.get("din_use_softmax", True)),
             float(model_cfg.get("activation_epsilon", 1e-9)),
         )
+        # Optional pieces of the authors' released TensorFlow model, so that
+        # they can be ablated one at a time.  All default to the paper/FuxiCTR
+        # structure used by din.yaml and din_paper.yaml.
+        self.hist_fcn = bool(model_cfg.get("hist_fcn", False))
+        if self.hist_fcn:
+            # DIN authors: batch_normalization -> dense(hidden_units) after the
+            # activation unit, i.e. a learned projection of the pooled history.
+            self.hist_bn = nn.BatchNorm1d(2 * dim)
+            self.hist_dense = nn.Linear(2 * dim, 2 * dim)
+        self.dnn_input = str(model_cfg.get("dnn_input", "concat")).lower()
+        if self.dnn_input not in {"concat", "author"}:
+            raise ValueError(f"Unsupported dnn_input {self.dnn_input!r}")
+        in_dim = 6 * dim if self.dnn_input == "author" else 4 * dim
+        self.input_bn = bool(model_cfg.get("input_bn", False))
+        if self.input_bn:
+            # DIN authors: batch_normalization on the concatenated DNN input.
+            self.dnn_bn = nn.BatchNorm1d(in_dim)
         self.dnn = MLPBlock(
-            4 * dim,
+            in_dim,
             list(model_cfg.get("dnn_hidden_units", [1024, 512, 256])),
             str(model_cfg.get("dnn_activations", "dice")),
             float(model_cfg.get("net_dropout", 0.1)),
@@ -95,4 +112,14 @@ class DIN(AdsModel):
         target = torch.cat([item(batch["item_id"]), cate(batch["cate_id"])], dim=-1)
         sequence = torch.cat([item(batch["item_history"]), cate(batch["cate_history"])], dim=-1)
         pooled = self.attention(target, sequence, batch["item_history"] != 0)
-        return self.dnn(torch.cat([target, pooled], dim=-1)).squeeze(-1)
+        if self.hist_fcn:
+            pooled = self.hist_dense(self.hist_bn(pooled))
+        if self.dnn_input == "author":
+            # DIN authors' final MLP input: [u, i, u * i].
+            x = torch.cat([pooled, target, pooled * target], dim=-1)
+        else:
+            # Paper Fig. 2: concatenate the user representation and the candidate.
+            x = torch.cat([target, pooled], dim=-1)
+        if self.input_bn:
+            x = self.dnn_bn(x)
+        return self.dnn(x).squeeze(-1)

@@ -153,6 +153,16 @@ multiplies the rate by 0.1 and `early_stop_patience` counts epochs.
    paper states neither.  `model.embedding_init: normal | glorot_uniform` now
    selects it; the finished 50-epoch run used `normal` and a 3-epoch
    `glorot_uniform` control was started to test whether this explains the gap.
+10. **Released-model details absent from the paper.**  `din/model.py` applies
+   BatchNorm and a 128-d dense layer (`hist_bn` / `hist_fcn`) to the pooled
+   history, feeds the MLP `[u, i, u*i]`, applies BatchNorm to that input, uses
+   `sigmoid` everywhere and softmax in the attention.  Paper Fig. 2 / Eq. (3)
+   describes the concatenation of the user and candidate representations without
+   those layers.  `model.hist_fcn`, `model.dnn_input` (`concat` | `author`) and
+   `model.input_bn` switch the released structure on for ablations; they default
+   to off, so the 50-epoch run is unaffected.  Note: `user_emb_w` is declared in
+   `din/model.py` but never used, so the released DIN has no user-id input in
+   practice (the base model in the same repository does use it).
 
 ## 6. How to run
 
