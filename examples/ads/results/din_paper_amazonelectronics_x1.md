@@ -130,8 +130,13 @@ it.
   Three candidates are **not** differences: MLP widths (80/40 in both),
   optimiser (SGD 1.0, batch 32 in both) and user embeddings — `user_emb_w` is
   declared in `din/model.py` but **never used**, unlike the base model in the
-  same repository.  The embedding initialisation has been tested and ruled out
-  (see the ablations below).
+  same repository.
+  Ablation status (three epochs each, identical protocol): the embedding
+  initialisation makes no difference (≤0.002), the sigmoid activation alone is
+  0.010–0.023 **worse**, and the released structural cluster closes the gap —
+  0.8597 / 0.8678 / 0.8696 at epochs 1–3, against 0.8245 / 0.8344 / 0.8400 for
+  the paper structure and the authors' README 0.8698.  So the missing pieces are
+  structural; which of them matters is not yet isolated.
 * **Model selection uses the test split** because the released split has no
   validation set — the authors' `_eval` does the same.  The number is therefore
   best-over-epochs test gAUC, not an untouched held-out score.
@@ -178,17 +183,35 @@ still off), so it isolates the authors' activation:
 Sigmoid is consistently 0.010–0.023 **worse**, so switching to the authors'
 activation does not close the gap in this structure.
 
-### Released model structure — running
+### Released model structure — supported
 
 The second 3-epoch arm applies the released model's whole cluster at once:
-sigmoid, softmax on, `hist_fcn` (BatchNorm + dense 128 after the pooled
-history), `[u, i, u*i]` MLP input and BatchNorm on that input.  It started
-2026-10-30 15:13 on card 2 (the first attempt at 14:25 was rejected by Hydra
-because the new keys need a `+` prefix).
+sigmoid, softmax with the authors' `sqrt(d)` scaling, `hist_fcn` (BatchNorm +
+dense 128 after the pooled history), `[u, i, u*i]` MLP input and BatchNorm on
+that input.
 
-`din.py` now exposes `model.hist_fcn`, `model.dnn_input` and `model.input_bn`
-for these arms; all default to the paper structure, so `din.yaml` and the
-50-epoch run are unaffected.  Results will be appended here.
+| Epoch | Paper structure (PReLU) | sigmoid only | released structure |
+| --- | --- | --- | --- |
+| 1 | 0.8245 | 0.8015 | **0.8597** |
+| 2 | 0.8344 | 0.8206 | **0.8678** |
+| 3 | 0.8400 | 0.8304 | **0.8696** |
+
+After three epochs the released structure is at 0.8696 — the authors' README
+reports 0.8698 for their full run — while the paper's described structure is
+0.030 behind at the same epoch.  This is the first candidate that actually
+closes the gap, and it does so with the same optimiser, batch size and learning
+rate as the paper run.
+
+Which piece of the cluster matters (the `hist_bn`/`hist_fcn` projection, the
+`[u, i, u*i]` input, the input BatchNorm, or the softmax scaling) has **not**
+been decomposed; the arm changes them together.  `din.py` exposes
+`model.hist_fcn`, `model.dnn_input`, `model.input_bn` and
+`model.attention_scale` so they can be split later; all default to the paper
+structure, so `din.yaml` and the 50-epoch run are unaffected.
+
+A full 50-epoch run of the released structure was started on 2026-10-30 17:38
+(card 2, `din_author_full`) to obtain the final number; its result will replace
+this paragraph.
 
 ## Artifacts
 

@@ -27,6 +27,7 @@ benchmark ``DIN_amazonelectronics_x1`` (5,403,522 parameters):
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import torch
@@ -42,10 +43,11 @@ class DINAttention(nn.Module):
     """FuxiCTR ``DIN_Attention``."""
 
     def __init__(self, dim: int, hidden: list[int], activation: str, dropout: float, use_softmax: bool,
-                 activation_epsilon: float = 1e-9) -> None:
+                 activation_epsilon: float = 1e-9, scale_before_softmax: bool = False) -> None:
         super().__init__()
         self.dim = dim
         self.use_softmax = use_softmax
+        self.scale_before_softmax = scale_before_softmax
         self.attention_layer = MLPBlock(4 * dim, hidden, activation, dropout, batch_norm=False, output_dim=1,
                                         activation_epsilon=activation_epsilon)
 
@@ -57,6 +59,9 @@ class DINAttention(nn.Module):
         mask = mask.to(weight.dtype)
         weight = weight * mask
         if self.use_softmax:
+            if self.scale_before_softmax:
+                # DIN authors' code: divide by sqrt(d) before the softmax.
+                weight = weight / math.sqrt(self.dim)
             weight = (weight + -1.0e9 * (1 - mask)).softmax(dim=-1)
         return (weight.unsqueeze(-1) * sequence).sum(dim=1)
 
@@ -78,6 +83,7 @@ class DIN(AdsModel):
             float(model_cfg.get("attention_dropout", 0.1)),
             bool(model_cfg.get("din_use_softmax", True)),
             float(model_cfg.get("activation_epsilon", 1e-9)),
+            bool(model_cfg.get("attention_scale", False)),
         )
         # Optional pieces of the authors' released TensorFlow model, so that
         # they can be ablated one at a time.  All default to the paper/FuxiCTR
