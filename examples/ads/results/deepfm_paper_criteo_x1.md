@@ -2,9 +2,11 @@
 
 | Field | Value |
 | --- | --- |
-| Status | **running** (started 2026-10-30 10:04:30 CST) |
+| Status | **finished** (early stopped at epoch 6; best epoch 1) |
+| Started / finished | 2026-10-30 10:04:30 → 10:38 (CST) |
+| Wall clock | 33 min (6 epochs × ~300 s + ~7 min of data loading) |
 | Config | `examples/ads/conf/train/deepfm_paper.yaml` |
-| Code commit | `62f4607` (DIN paper-protocol trainer, Adam + fixed LR + early stop) |
+| Code commit | launched from the working tree at 10:04, committed 10:13 as `1ed6f6e`; training code and config are identical to that commit (only the results doc/README came later) |
 | Device | Kunlunxin P800, card 2, vendor torch 2.9.0+cu128, fp32 |
 | Parameters | 23,427,077 |
 | Output | `/data2/jiangxuhui/logs/ads-paper-deepfm/ckpts/deepfm_paper-cuda/checkpoint/` |
@@ -41,17 +43,40 @@ BatchNorm, embedding L2 1e-5).
 
 ## Curve
 
-Epoch 1 takes ~309 s (33M rows / 4096 = 8,058 steps at ~107k samples/s).
+Each epoch is ~300 s (33M rows / 4096 = 8,058 steps at ~110k samples/s).
 
 | Epoch | Train loss | Valid AUC | Valid logloss |
 | --- | --- | --- | --- |
-| 1 | 0.4543 | 0.8036 | 0.4482 |
-| pending | | | |
+| **1 (best)** | **0.4543** | **0.8036** | **0.4482** |
+| 2 | 0.4373 | 0.8016 | 0.4509 |
+| 3 | 0.4242 | 0.7978 | 0.4595 |
+| 4 | 0.4157 | 0.7930 | 0.4648 |
+| 5 | 0.4080 | 0.7894 | 0.4741 |
+| 6 | 0.4017 | 0.7856 | 0.4819 |
+
+Early stopping fired at epoch 6: the best validation AUC was epoch 1 and nothing
+improved for the next 5 epochs.  Training loss keeps falling while validation
+AUC falls every epoch — the paper's configuration overfits from the first epoch
+on this 33M-row training set.
 
 ## Results
 
-Pending — the final table will replace this section when the run stops (early
-stopping or the 100-epoch cap).
+| Metric | This run (best epoch 1) | BARS `deepfm.yaml` (11 epochs) | Paper (different split) |
+| --- | --- | --- | --- |
+| test AUC | 0.8040 | 0.8137 | 0.8007 |
+| test logloss | 0.4477 | 0.4381 | 0.45083 |
+| valid AUC | 0.8036 | — | — |
+
+Against the only comparable target on this data (BARS) the paper-settings run is
+0.0097 AUC lower and 0.0096 logloss higher, while it is close to the paper's own
+number — but that number comes from a 90/10 split that cannot be reproduced, so
+it is context, not a target.
+
+**Why it underperforms BARS is not established.**  The paper-silent differences
+are BatchNorm, embedding L2 (both added by FuxiCTR) and the learning rate /
+early-stop rule (ours).  Any of them could matter; no ablation has been run.  A
+cheap next check would be a 2–3 epoch sweep of the learning rate (1e-4, 3e-4),
+since the model already peaks after one epoch at 1e-3.
 
 ## Notes
 
