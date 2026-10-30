@@ -15,6 +15,8 @@ published, downloadable benchmark result; see [EVIDENCE.md](EVIDENCE.md).
 
 Runs of the paper-protocol configs are recorded in [results/](results/README.md),
 with their settings, curves and final numbers.
+Training and inference throughput, including the BF16 probes, are in
+[../EFFICIENCY.md](../EFFICIENCY.md).
 
 Layout (independent of the retrieval and recommendation modules):
 
