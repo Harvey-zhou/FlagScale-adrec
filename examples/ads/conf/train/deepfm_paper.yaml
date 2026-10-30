@@ -1,0 +1,51 @@
+# DeepFM paper protocol -- Guo et al., IJCAI 2017 (arXiv:1703.04247v1) -- Criteo_x1.
+#
+# Not the same as `deepfm.yaml` (BARS/FuxiCTR: dropout 0.1, BatchNorm, embedding
+# L2 1e-5, plateau decay).  This one follows the paper's Criteo settings.  Tags:
+#   [paper] stated in the paper and must not change for a paper run
+#   [ours]  not stated by the paper (it has no reference code); a free choice
+#
+# Paper Table 2 (Criteo): AUC 0.8007 / logloss 0.45083.  The paper uses a random
+# 90/10 split of the 45M-row Kaggle data; that split is not distributed, so the
+# number is not comparable to this dataset (7:2:1, AFN split).  The BARS number
+# on this split is AUC 0.8137 / logloss 0.4381.
+name: deepfm_paper
+seed: 2021                      # [ours]
+batch_size: 4096                # [ours] the paper does not state it; 4096 is the Criteo convention
+eval_batch_size: 65536          # [ours] evaluation only
+epochs: 100                     # [ours] safety cap; early stopping decides
+early_stop_patience: 5          # [ours] the paper gives no early-stop rule
+early_stop_min_delta: 0.0
+monitor: AUC                    # [paper 3.1.2] AUC and logloss are the metrics
+log_every: 0
+output_dir: ${experiment.exp_dir}/checkpoint
+
+model:
+  model_type: deepfm
+  torch_dtype: fp32             # [ours]
+  embedding_dim: 10             # [paper 3.1.4] "latent dimension of FM is 10"
+  hidden_units: [400, 400, 400] # [paper 3.1.4] "network structure: 400-400-400"
+  hidden_activations: relu      # [paper 3.1.4] relu for the deep models
+  net_dropout: 0.5              # [paper 3.1.4] "dropout: 0.5"
+  batch_norm: false             # [ours] the paper describes no BatchNorm
+
+data:
+  path: ${oc.env:FLAGOS_ADS_DATA,/flagos-ads/datasets}/criteo_x1
+  # The paper's 90/10 split has no validation set; use the valid split of this
+  # dataset for model selection.
+  valid_split: valid
+  group_key: null
+  num_workers: 2
+  max_samples: null
+  eval_max_samples: null
+
+optimizer:
+  name: adam                    # [paper 3.1.4] "optimizer: Adam"
+  lr: 1.0e-3                    # [ours]
+  weight_decay: 0.0             # [ours]
+  embedding_regularizer: 0.0    # [ours] the paper uses dropout only
+  max_gradient_norm: 0.0        # [ours] no clipping
+
+scheduler:
+  type: none                    # [ours] fixed learning rate
+  warmup_steps: 0

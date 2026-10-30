@@ -9,6 +9,7 @@ published, downloadable benchmark result; see [EVIDENCE.md](EVIDENCE.md).
 | `din` | DIN (FuxiCTR v2.0.1) | BARS AmazonElectronics_x1 | BARS test gAUC 0.8835 / AUC 0.8860 |
 | `din_paper` | DIN, KDD'18 paper protocol (SGD 1.0, batch 32, PReLU) | AmazonElectronics_x1 | paper 0.8818 — see [DIN_PAPER_PROTOCOL.md](DIN_PAPER_PROTOCOL.md) |
 | `din_paper_dice` | DIN + Dice, paper protocol | AmazonElectronics_x1 | paper 0.8871 — same document |
+| `deepfm_paper` | DeepFM, IJCAI'17 paper protocol (dropout 0.5, 400-400-400, no BN) | Criteo_x1 (7:2:1) | paper split unavailable; BARS reference AUC 0.8137 — see [results/](results/README.md) |
 | `deepfm` | DeepFM (FuxiCTR v1.1.0) | BARS Criteo_x1 | BARS test AUC 0.8137 / logloss 0.4381 |
 | `dcn_mix` | DCN-V2 + mixture of low-rank experts (FuxiCTR v1.1.0) | BARS Criteo_x1 | BARS DCN-V2 AUC 0.8142; paper Mix vs V2 -0.0003 |
 
