@@ -146,6 +146,13 @@ multiplies the rate by 0.1 and `early_stop_patience` counts epochs.
    the samples of a single card, so the learning-rate drop comes later than in
    the single-card protocol.  Batch 32 is a single-card setting; do not use
    `din_paper*` with more than one card.
+9. **Embedding initialisation.**  The tables are initialised N(0, 1e-4)
+   (FuxiCTR's convention, used by every BARS result here), while the authors'
+   `tf.get_variable` tables get TensorFlow's default `glorot_uniform`
+   (bound ~0.0098 for a 63,003 x 64 table, ~56x the standard deviation).  The
+   paper states neither.  `model.embedding_init: normal | glorot_uniform` now
+   selects it; the finished 50-epoch run used `normal` and a 3-epoch
+   `glorot_uniform` control was started to test whether this explains the gap.
 
 ## 6. How to run
 

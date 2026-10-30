@@ -54,6 +54,23 @@ class AdsModel(nn.Module):
         return cls(model_cfg, meta).to(device)
 
     def reset_parameters(self) -> None:
+        """Initialise weights the FuxiCTR way, or the authors' TF way on request.
+
+        ``model.embedding_init`` selects the embedding-table initialiser:
+
+        * ``normal`` (default): N(0, 1e-4).  This is FuxiCTR's convention and
+          what every BARS config in this repository was trained with;
+        * ``glorot_uniform``: Xavier/Glorot uniform, the TensorFlow default that
+          the DIN authors' ``tf.get_variable`` tables get.  For a 63,003 x 64
+          table the bound is ~0.0098, i.e. about 100x the standard deviation of
+          ``normal``, so this is a materially different starting point for SGD.
+
+        Dense layers keep FuxiCTR's Xavier-normal initialisation either way.
+        """
+
+        embedding_init = str(self.model_cfg.get("embedding_init", "normal")).lower()
+        if embedding_init not in {"normal", "glorot_uniform", "xavier_uniform"}:
+            raise ValueError(f"Unsupported embedding_init {embedding_init!r}")
         for module in self.modules():
             if type(module) is nn.Linear:
                 nn.init.xavier_normal_(module.weight)
@@ -62,11 +79,20 @@ class AdsModel(nn.Module):
             elif type(module) is nn.Embedding:
                 with torch.no_grad():
                     if module.padding_idx is not None:
-                        rows = [i for i in range(module.num_embeddings) if i != module.padding_idx]
-                        module.weight[rows] = torch.randn(len(rows), module.embedding_dim) * 1e-4
-                        module.weight[module.padding_idx].zero_()
+                        rows = torch.tensor(
+                            [i for i in range(module.num_embeddings) if i != module.padding_idx],
+                            dtype=torch.long, device=module.weight.device)
                     else:
-                        nn.init.normal_(module.weight, std=1e-4)
+                        rows = torch.arange(module.num_embeddings, device=module.weight.device)
+                    if embedding_init == "normal":
+                        module.weight[rows] = torch.randn(
+                            len(rows), module.embedding_dim, device=module.weight.device) * 1e-4
+                    else:
+                        fresh = torch.empty(len(rows), module.embedding_dim, device=module.weight.device)
+                        nn.init.xavier_uniform_(fresh)
+                        module.weight[rows] = fresh
+                    if module.padding_idx is not None:
+                        module.weight[module.padding_idx].zero_()
 
     def embedding_parameters(self) -> list[nn.Parameter]:
         return [p for name, p in self.named_parameters() if "embedding_layer" in name and p.requires_grad]

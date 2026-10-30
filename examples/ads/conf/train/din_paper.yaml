@@ -32,6 +32,8 @@ model:
   dnn_activations: prelu        # [paper Table 3 fn. a]
   net_dropout: 0.0              # [ours] no dropout on Amazon (dropout is an Alibaba ablation)
   batch_norm: true              # [code] BN after the activation unit and before the MLP
+  embedding_init: normal        # [ours] FuxiCTR N(0,1e-4); the authors' TF tables get
+                                #        glorot_uniform (~100x larger), see DIN_PAPER_PROTOCOL.md
 
 data:
   path: ${oc.env:FLAGOS_ADS_DATA,/flagos-ads/datasets}/amazonelectronics_x1

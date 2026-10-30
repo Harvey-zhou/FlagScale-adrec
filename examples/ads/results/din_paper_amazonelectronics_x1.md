@@ -7,7 +7,7 @@
 | Wall clock | 13 h 46 m (training 49,547 s) |
 | Config | `examples/ads/conf/train/din_paper.yaml` |
 | Protocol document | [../DIN_PAPER_PROTOCOL.md](../DIN_PAPER_PROTOCOL.md) |
-| Code commit | `8211572` |
+| Code commit | launched from the uncommitted working tree at 10:06, committed 11:01 as `8211572`. The run predates two later edits: the 10:58 write-then-rename of `history.json` (no effect on training) and `e463e1e` (PReLU slope `init=0`), which is **not** in this run — it used PyTorch's default 0.25. |
 | Device | Kunlunxin P800, card 6, vendor torch 2.9.0+cu128, fp32 |
 | Parameters | 4,152,226 |
 | Output | `/data2/jiangxuhui/logs/ads-paper-queue/ckpts/din_paper-cuda/checkpoint/` |
@@ -35,10 +35,14 @@ Paper target (Table 3, DIN with PReLU): **gAUC 0.8818** (DIN + Dice: 0.8871).
 
 ## Curve
 
-The learning rate drops from 1.0 to 0.1 at epoch 5 (step 336,000) and then stays
-at 0.1.  gAUC peaks at epoch 7 and declines afterwards — the run continues to
-epoch 50 because that is what the authors' code does, and the best checkpoint is
-saved at every improvement.
+The learning rate drops from 1.0 to 0.1 at step 336,000 and then stays at 0.1.
+The drop lands at 336,000 / 81,524 ≈ 4.12 epochs, i.e. **inside epoch 5**.  The
+`LR` column below is the rate at the *start* of the epoch, which is why epoch 5
+still shows 1.0 and epoch 6 is the first one that starts at 0.1.
+
+gAUC peaks at epoch 7 and declines afterwards — the run continues to epoch 50
+because that is what the authors' code does, and the best checkpoint is saved at
+every improvement.
 
 | Epoch | LR | Train loss | gAUC | AUC | Epoch time (s) |
 | --- | --- | --- | --- | --- | --- |
@@ -92,6 +96,19 @@ The model overfits from epoch 8 on (train loss 0.367 → 0.088 while test gAUC
 falls 0.8555 → 0.7968).  The reported number is the best checkpoint, which is
 what the authors' code restores before its final test pass.
 
+### Against the three available targets
+
+| Target | gAUC | This run |
+| --- | --- | --- |
+| Paper Table 3 (DIN, PReLU) | 0.8818 | −0.0263 |
+| Authors' README (their own run of this code) | 0.8698 | −0.0143 |
+| BARS/FuxiCTR `din.yaml` on this data | 0.8835 | −0.0280 |
+
+The authors' own README reports 0.8698 with the released code on the same kind
+of split, so the paper's 0.8818 is not reproducible as published even by its
+authors; 0.8698 is the more meaningful target, and this run is 0.014 short of
+it.
+
 ## Notes
 
 * **First attempt aborted (LR schedule bug).**  The first version of the
@@ -100,11 +117,21 @@ what the authors' code restores before its final test pass.
   code assigns `lr = 0.1` once, so the rate stays at 0.1; `min_lr: 0.1` now
   reproduces that.  Up to epoch ~10 both runs are identical (same seed), which is
   why the best number is unchanged — the model overfits after epoch 7 either way.
-* **Gap to the paper.**  The same data and the BARS/FuxiCTR configuration
-  (`din.yaml`) reach gAUC 0.8835, so the 0.026 gap comes from the paper's own
-  choices rather than from the dataset: PReLU instead of the code's sigmoid,
-  no softmax in the activation unit, SGD 1.0 with batch 32 instead of Adam 5e-4
-  with batch 1024, and MLPs of [80, 40] instead of [1024, 512, 256].
+* **Gap to the paper — hypotheses, not verified.**  The BARS config reaches
+  0.8835 gAUC on the same data, so the gap is not a dataset problem, but which
+  difference causes it has **not** been isolated by ablation.  Candidates, in
+  the order they are worth testing:
+  (a) embedding initialisation — this repository uses FuxiCTR's N(0, 1e-4)
+      while the authors' `tf.get_variable` tables default to `glorot_uniform`
+      (bound ≈0.0098 for a 63,003×64 table, ~56× the standard deviation of the
+      current init); with SGD at lr 1.0 that is a materially different start and
+      a plausible reason for the early overfitting;
+  (b) PReLU instead of the code's sigmoid;
+  (c) no softmax in the activation unit;
+  (d) SGD 1.0 / batch 32 instead of Adam 5e-4 / batch 1024;
+  (e) MLPs [80, 40] instead of [1024, 512, 256].
+  (a) is being tested first because it is a single-variable change and costs
+  three epochs; see the ablation section below.
 * **Model selection uses the test split** because the released split has no
   validation set — the authors' `_eval` does the same.  The number is therefore
   best-over-epochs test gAUC, not an untouched held-out score.
@@ -116,6 +143,25 @@ what the authors' code restores before its final test pass.
   unaffected; an exact match to the current code would need a rerun.
 * 50 epochs took 13 h 46 m (median 905 s/epoch; 2,882 samples/s).  The
   1,300–1,500 s epochs were periods when benchmark jobs shared the host.
+
+## Initialisation ablation (running)
+
+To test hypothesis (a) without spending 13 hours, three epochs of the same
+protocol with the authors' TensorFlow initialiser were started at 2026-10-30
+10:23:41 on card 3:
+
+```bash
+train.model.embedding_init=glorot_uniform train.epochs=3 train.name=din_paper_glorot
+```
+
+Output: `/data2/jiangxuhui/logs/ads-din-glorot/ckpts/din_paper_glorot-cuda/`.
+Compare against epochs 1–3 above: **0.8245 / 0.8344 / 0.8400**.
+
+Caveat: this arm runs the current code, which also starts PReLU at 0 (fixed in
+`e463e1e`) instead of the baseline's 0.25, so it is not a perfectly
+single-variable change.  If the difference is large, a matched arm with the
+`normal` embedding initialiser will follow; if it is small, initialisation is
+not the explanation and the next candidate is the activation/softmax pair.
 
 ## Artifacts
 
