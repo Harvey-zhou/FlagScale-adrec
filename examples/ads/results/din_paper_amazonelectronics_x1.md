@@ -164,15 +164,27 @@ SGD at lr 1.0 washes out a 56× scale difference within the first epoch, so this
 hypothesis does not explain the 0.014 gap.  Outputs: `ads-din-ctrl/`,
 `ads-din-glorot/` (outside the repository).
 
-### Model structure and activation — running
+### Activation (sigmoid) — not supported
 
-Two 3-epoch arms started 2026-10-30 14:25, when the initialisation arms freed
-cards 2 and 3:
+Three epochs, only the activation changed (attention and MLP to sigmoid, softmax
+still off), so it isolates the authors' activation:
 
-* `din_paper_sigmoid` — only the activation changes (attention and MLP to
-  sigmoid, softmax still off), isolating (b);
-* `din_paper_author` — the released model's whole cluster: sigmoid, softmax on,
-  `hist_fcn`, `[u, i, u*i]` input and BatchNorm on that input.
+| Epoch | PReLU baseline | sigmoid |
+| --- | --- | --- |
+| 1 | 0.8245 | 0.8015 |
+| 2 | 0.8344 | 0.8206 |
+| 3 | 0.8400 | 0.8304 |
+
+Sigmoid is consistently 0.010–0.023 **worse**, so switching to the authors'
+activation does not close the gap in this structure.
+
+### Released model structure — running
+
+The second 3-epoch arm applies the released model's whole cluster at once:
+sigmoid, softmax on, `hist_fcn` (BatchNorm + dense 128 after the pooled
+history), `[u, i, u*i]` MLP input and BatchNorm on that input.  It started
+2026-10-30 15:13 on card 2 (the first attempt at 14:25 was rejected by Hydra
+because the new keys need a `+` prefix).
 
 `din.py` now exposes `model.hist_fcn`, `model.dnn_input` and `model.input_bn`
 for these arms; all default to the paper structure, so `din.yaml` and the
