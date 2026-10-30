@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | **running** (started 2026-10-29 15:06:41 CST, no evaluation yet) |
+| Status | **running** (started 2026-10-29 15:06:41 CST; epoch 267/1000 at 2026-10-30 09:48; 13 evaluations done) |
 | Config | `examples/rec/conf/train/lightgcn_paper.yaml` |
 | Protocol document | [../PAPER_PROTOCOLS.md](../PAPER_PROTOCOLS.md) |
 | Code commit | `da5195a` |
@@ -47,14 +47,29 @@ later.
 
 ## Curve (test recall@20 / ndcg@20, every 20 epochs)
 
-Evaluation happens every 20 epochs, so the first row arrives after ~84 minutes.
+Evaluation happens every 20 epochs (the first row arrives after ~84 minutes).
 
 | Epoch | recall@20 | ndcg@20 |
 | --- | --- | --- |
-| 20 | pending | pending |
-| 40 | pending | pending |
+| 20 | 0.1339 | 0.1160 |
+| 40 | 0.1487 | 0.1282 |
+| 60 | 0.1569 | 0.1345 |
+| 80 | 0.1626 | 0.1397 |
+| 100 | 0.1668 | 0.1431 |
+| 120 | 0.1689 | 0.1449 |
+| 140 | 0.1714 | 0.1466 |
+| 160 | 0.1725 | 0.1476 |
+| 180 | 0.1736 | 0.1489 |
+| 200 | 0.1743 | 0.1496 |
+| 220 | 0.1748 | 0.1495 |
+| 240 | 0.1755 | 0.1504 |
+| 260 | 0.1766 | 0.1511 |
 | … | pending | pending |
 | 1000 | pending | pending |
+
+The curve is still climbing, with the gains per 20 epochs shrinking (0.0148 at
+epoch 40, 0.0011 at epoch 260); the paper's 0.1823 comes from the full 1,000
+epochs.
 
 ## Cost (measured on this host)
 
@@ -72,9 +87,12 @@ identical `index_select` + `index_add` path.
 
 ## Results
 
-Pending.  The final table (this run vs paper vs released code) and the full
-curve will replace this section when the run completes; the per-epoch data is
-already written to `history.json` after every evaluation.
+Interim (epoch 260): recall@20 **0.1766** / ndcg@20 **0.1511** against the
+paper's 0.1823 / 0.1555.  The metric is still rising at every evaluation, so this
+is not a final number.  At 252 s/epoch the remaining 733 epochs are ~51 h, i.e.
+completion around 2026-10-31 13:00 CST.  The final table (this run vs paper vs
+released code) and the full curve will replace this section when the run
+completes; per-epoch data is written to `history.json` after every evaluation.
 
 ## Artifacts
 

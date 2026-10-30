@@ -2,7 +2,9 @@
 
 | Field | Value |
 | --- | --- |
-| Status | **running** (started 2026-10-29 10:06:07 CST; 16/50 epochs done at 15:08) |
+| Status | **finished** (all 50 epochs) |
+| Started / finished | 2026-10-29 10:06:07 → 23:52 (CST) |
+| Wall clock | 13 h 46 m (training 49,547 s) |
 | Config | `examples/ads/conf/train/din_paper.yaml` |
 | Protocol document | [../DIN_PAPER_PROTOCOL.md](../DIN_PAPER_PROTOCOL.md) |
 | Code commit | `8211572` |
@@ -56,18 +58,39 @@ saved at every improvement.
 | 14 | 0.1 | 0.2839 | 0.8328 | 0.8319 | 1047 |
 | 15 | 0.1 | 0.2734 | 0.8352 | 0.8354 | 1431 |
 | 16 | 0.1 | 0.2631 | 0.8339 | 0.8337 | 1523 |
+| 17 | 0.1 | 0.2534 | 0.8277 | 0.8269 | 811 |
+| 18 | 0.1 | 0.2436 | 0.8266 | 0.8256 | 787 |
+| 19 | 0.1 | 0.2342 | 0.8267 | 0.8254 | 792 |
+| 20 | 0.1 | 0.2251 | 0.8242 | 0.8221 | 873 |
+| 21 | 0.1 | 0.2166 | 0.8225 | 0.8219 | 841 |
+| 22 | 0.1 | 0.2087 | 0.8216 | 0.8207 | 898 |
+| 23 | 0.1 | 0.2005 | 0.8148 | 0.8139 | 905 |
+| 24 | 0.1 | 0.1932 | 0.8156 | 0.8139 | 897 |
+| 25 | 0.1 | 0.1857 | 0.8150 | 0.8144 | 821 |
+| 26 | 0.1 | 0.1792 | 0.8118 | 0.8103 | 809 |
+| 27 | 0.1 | 0.1730 | 0.8062 | 0.8050 | 820 |
+| 28 | 0.1 | 0.1666 | 0.8096 | 0.8076 | 828 |
+| 29 | 0.1 | 0.1602 | 0.8149 | 0.8149 | 847 |
+| 30 | 0.1 | 0.1554 | 0.8096 | 0.8088 | 869 |
+| 35 | 0.1 | 0.1310 | 0.8019 | 0.8003 | 902 |
+| 40 | 0.1 | 0.1130 | 0.8039 | 0.8032 | 880 |
+| 45 | 0.1 | 0.0988 | 0.7971 | 0.7968 | 910 |
+| 50 (last) | 0.1 | 0.0881 | 0.7968 | 0.7953 | 910 |
 
-Epoch times above 1,050 s are periods when another job shared the host.
+Epoch times of 1,300–1,500 s around epochs 8–16 were periods when benchmark
+jobs shared the host; the steady state is ~800–900 s per epoch.
 
 ## Results
 
-| Metric | Best epoch (7) | Paper |
-| --- | --- | --- |
-| gAUC | **0.8555** | 0.8818 |
-| AUC | 0.8564 | — |
+| Metric | Best epoch (7) | Final epoch (50) | Paper |
+| --- | --- | --- | --- |
+| gAUC | **0.8555** | 0.7968 | 0.8818 |
+| AUC | 0.8564 | 0.7953 | — |
+| logloss | 0.4828 | — | — |
 
-Final numbers will replace this table when the 50-epoch run ends; the current
-best is already saved.
+The model overfits from epoch 8 on (train loss 0.367 → 0.088 while test gAUC
+falls 0.8555 → 0.7968).  The reported number is the best checkpoint, which is
+what the authors' code restores before its final test pass.
 
 ## Notes
 
@@ -85,8 +108,14 @@ best is already saved.
 * **Model selection uses the test split** because the released split has no
   validation set — the authors' `_eval` does the same.  The number is therefore
   best-over-epochs test gAUC, not an untouched held-out score.
-* 50 epochs at ~1,030 s each is ~14.5 h; the run started 10:06 and is expected
-  to finish around 00:45–02:00 on 2026-10-30.
+* **PReLU initial slope.**  This run was launched before commit `e463e1e`, which
+  changed `nn.PReLU(width)` (PyTorch default slope 0.25) to `init=0.0`.  The
+  paper does not state the initial α, and the released code has no PReLU at all
+  (both of its MLPs use sigmoid), so neither value contradicts the paper — but
+  the protocol document now describes 0.0.  Everything else in this table is
+  unaffected; an exact match to the current code would need a rerun.
+* 50 epochs took 13 h 46 m (median 905 s/epoch; 2,882 samples/s).  The
+  1,300–1,500 s epochs were periods when benchmark jobs shared the host.
 
 ## Artifacts
 

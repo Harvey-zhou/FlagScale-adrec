@@ -10,7 +10,7 @@ the `metrics.json` / `history.json` next to each checkpoint.
 
 | Run | Dataset | Status | Result |
 | --- | --- | --- | --- |
-| [DIN paper protocol](din_paper_amazonelectronics_x1.md) | Amazon Electronics_x1 | running (16/50 epochs) | best gAUC 0.8555 so far (paper 0.8818) |
+| [DIN paper protocol](din_paper_amazonelectronics_x1.md) | Amazon Electronics_x1 | finished (50 epochs) | gAUC 0.8555 (paper 0.8818) |
 | DIN + Dice paper protocol | Amazon Electronics_x1 | not started | target 0.8871 |
 
 The BARS/FuxiCTR configs (`din.yaml`, `deepfm.yaml`, `dcn_mix.yaml`) are covered
