@@ -144,24 +144,28 @@ it.
 * 50 epochs took 13 h 46 m (median 905 s/epoch; 2,882 samples/s).  The
   1,300–1,500 s epochs were periods when benchmark jobs shared the host.
 
-## Initialisation ablation (running)
+## Initialisation ablation
 
-To test hypothesis (a) without spending 13 hours, three epochs of the same
-protocol with the authors' TensorFlow initialiser were started at 2026-10-30
-10:23:41 on card 3:
+Three-epoch arms under the same protocol, run in parallel on cards 3 (glorot)
+and 2 (normal control) from 2026-10-30 10:23 / 10:52.  Both use the current
+code, so both start PReLU at 0; the only difference between them is the
+embedding initialiser.
 
-```bash
-train.model.embedding_init=glorot_uniform train.epochs=3 train.name=din_paper_glorot
-```
+| Arm | Embedding init | PReLU init | Epoch 1 gAUC | Epoch 1 train loss |
+| --- | --- | --- | --- | --- |
+| original 50-epoch run | N(0, 1e-4) | 0.25 | 0.8245 | 0.5448 |
+| control | N(0, 1e-4) | 0 | 0.8227 | 0.5466 |
+| glorot | glorot_uniform | 0 | 0.8226 | 0.5461 |
 
-Output: `/data2/jiangxuhui/logs/ads-din-glorot/ckpts/din_paper_glorot-cuda/`.
-Compare against epochs 1–3 above: **0.8245 / 0.8344 / 0.8400**.
+**First-epoch evidence does not support hypothesis (a).**  With PReLU held at 0,
+the two embedding initialisers differ by 0.0001 gAUC (and 0.0005 in training
+loss): SGD at lr 1.0 washes the initial scale out within one epoch.  The PReLU
+start (0.25 vs 0) is worth ~0.002 at epoch 1.  Both arms run to 3 epochs; the
+table will be extended with epochs 2–3 and the conclusion updated, but the
+initialisation hypothesis is already unlikely to explain a 0.014–0.026 gap.
 
-Caveat: this arm runs the current code, which also starts PReLU at 0 (fixed in
-`e463e1e`) instead of the baseline's 0.25, so it is not a perfectly
-single-variable change.  If the difference is large, a matched arm with the
-`normal` embedding initialiser will follow; if it is small, initialisation is
-not the explanation and the next candidate is the activation/softmax pair.
+Outputs: `/data2/jiangxuhui/logs/ads-din-glorot/` and
+`/data2/jiangxuhui/logs/ads-din-ctrl/`.
 
 ## Artifacts
 
