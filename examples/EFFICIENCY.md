@@ -23,10 +23,11 @@ matters.
 | SASRec / MovieLens-1M | `sasrec_paper` | 128 | 159 | **5,361** | 5,135 | 3 min 01 s |
 | DeepFM / Criteo_x1 | `deepfm_paper` | 4096 | 6 | **110,230** | 110,329 | 29 min 57 s |
 | DIN / Amazon Electronics | `din_paper` | 32 | 50 | **2,755** | 2,882 | 13 h 41 m |
-| DIN / Amazon Electronics | `din_paper_dice` | 32 | 23 (running) | 2,147 | 2,158 | 7 h 46 m so far |
-| LightGCN / Gowalla | `lightgcn_paper` | 1024 | 383 (running) | 3,224 | 3,225 | 26 h 44 m so far |
-| DIN / Amazon Electronics | `din` (BARS, batch 1024) | 1024 | 4 (running) | **8,492** | 8,493 | 20 min so far |
+| DIN / Amazon Electronics | `din_paper_dice` | 32 | 50 | 2,109 | 2,158 | 17 h 13 m |
+| LightGCN / Gowalla | `lightgcn_paper` | 1024 | 814 (running) | 3,225 | 3,225 | 57 h so far |
+| DIN / Amazon Electronics | `din` (BARS, batch 1024) | 1024 | 9 | **8,493** | 8,493 | 46 min |
 | DIN / Amazon Electronics | `din_paper_bf16` (BF16) | 32 | 1 | **3,243** | 3,243 | 13 min 24 s |
+| DIN / Amazon, released structure | `din_author_full` | 32 | 50 | 2,204 | 2,213 | 16 h 36 m |
 
 The DIN paper protocol uses batch 32, so its samples/s is **not** comparable
 with the other vendors' batch-1024 column; the `din` BARS row exists precisely
@@ -39,16 +40,18 @@ One warm-up pass + three timed passes, batch 8192 (ads) / 1024 (SASRec).
 | Model | Dataset | Rows per pass | FP32 s/pass | FP32 rows/s | BF16 s/pass | BF16 rows/s |
 | --- | --- | --- | --- | --- | --- | --- |
 | DIN | Amazon Electronics test (384,806) | 384,806 | 1.743 | **220,762** | 2.494 | 154,345 |
-| DeepFM | Criteo_x1 test (4,587,167) | 4,587,167 | 4.568 | **1,004,304** | pending | pending |
+| DeepFM | Criteo_x1 test (4,587,167) | 4,587,167 | 4.568 | **1,004,304** | 3.863 | 1,187,606 |
 | SASRec | MovieLens-1M test (6,040 users × 101 candidates) | 6,040 | 0.0675 | **89,455** | 0.200 | 30,488 |
 | LightGCN | Gowalla test (29,858 users, full ranking) | pending | | | | |
 
 *Rows per pass* is one test example: an impression for the ads models, a user
 with its 101 candidates for SASRec.
  
-**BF16 works but is slower on this runtime**: autocast runs without error, yet
-DIN loses 30 % and SASRec 66 % throughput.  That is a property of the vendor
-kernel path, not of the models.  BF16 training is being measured separately.
+**BF16 works, and whether it helps depends on the model**: autocast runs
+without error; DeepFM gains 18 % (1,187,606 rows/s), while DIN loses 30 % and
+SASRec loses 66 %.  The small batch-32 / 1-head models fall back to
+conversion-heavy paths, the large embedding+MLP model does not.  This is a
+property of the vendor kernel mix, not of the models.
 
 ## BF16 status
 

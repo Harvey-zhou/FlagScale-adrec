@@ -2,7 +2,9 @@
 
 | Field | Value |
 | --- | --- |
-| Status | **running** (started 2026-10-30 09:51 CST) |
+| Status | **finished** (50 epochs; diverged to NaN at epoch 38, best checkpoint epoch 5) |
+| Started / finished | 2026-10-30 09:51 → 2026-10-31 03:11 (CST) |
+| Wall clock | 17 h 21 m end-to-end (17 h 13 m training across the 50 epochs) |
 | Config | `examples/ads/conf/train/din_paper_dice.yaml` |
 | Protocol document | [../DIN_PAPER_PROTOCOL.md](../DIN_PAPER_PROTOCOL.md) |
 | Code commit | `6b52a10` (includes `e463e1e`, PReLU/Dice slope init 0) |
@@ -35,7 +37,7 @@ One epoch ≈ 15 min; the first row arrives ~15 minutes after the data load.
 | 2 | 1.0 | 0.4911 | 0.8343 | 0.8358 |
 | 3 | 1.0 | 0.4643 | 0.8477 | 0.8493 |
 | 4 | 1.0 | 0.4426 | 0.8540 | 0.8556 |
-| **5 (best so far)** | **1.0** | **0.3927** | **0.8575** | **0.8587** |
+| **5 (best)** | **1.0** | **0.3927** | **0.8575** | **0.8587** |
 | 6 | 0.1 | 0.3676 | 0.8539 | 0.8546 |
 | 8 | 0.1 | 0.3393 | 0.8543 | 0.8549 |
 | 10 | 0.1 | 0.3096 | 0.8470 | 0.8461 |
@@ -45,19 +47,27 @@ One epoch ≈ 15 min; the first row arrives ~15 minutes after the data load.
 | 18 | 0.1 | 0.2033 | 0.8226 | 0.8214 |
 | 20 | 0.1 | 0.1822 | 0.8154 | 0.8142 |
 | 22 | 0.1 | 0.1636 | 0.8098 | 0.8081 |
+| 30 | 0.1 | 0.1120 | 0.7994 | 0.7983 |
+| 37 | 0.1 | 0.0860 | 0.8053 | 0.8040 |
+| 38 | 0.1 | **NaN** | 0.0 | 0.5 |
+| 50 | 0.1 | NaN | 0.0 | 0.5 |
 
 As in the PReLU run, the model peaks just before the learning-rate drop and then
-overfits while the training loss keeps falling.  The run continues to epoch 50;
-the best checkpoint is already saved.
+overfits while the training loss keeps falling.  At **epoch 38 the loss became
+NaN** and every later evaluation reports AUC 0.5 / gAUC 0.0; the best checkpoint
+(epoch 5) was already saved and is unaffected.  The divergence is a real
+property of this configuration on this stack — SGD at a constant 0.1 with Dice
+activations, even with the global-norm clip of 5 that the author code uses —
+and it is recorded rather than hidden.
 
 ## Results
 
-Interim (best epoch 5): gAUC **0.8575** / AUC 0.8587, versus 0.8555 / 0.8564 for
-the PReLU run and the paper's 0.8871.  Dice is worth about +0.002 here, far
-from the paper's +0.0053 over DIN — but the comparison is confounded: the PReLU
-run started the activation slope at 0.25 (pre-`e463e1e`) and this one starts at
-0, and neither matches the structure ablations above (the released structure is
-worth ~0.03).  The final table will replace this section at epoch 50.
+Final (best epoch 5): gAUC **0.8575** / AUC 0.8587 / logloss 0.4816, versus
+0.8555 / 0.8564 for the PReLU run and the paper's 0.8871.  Dice is worth about
++0.002 here, far from the paper's +0.0053 over DIN — but the comparison is
+confounded: the PReLU run started the activation slope at 0.25 (pre-`e463e1e`)
+and this one starts at 0, and neither matches the structure ablations (the
+released structure is worth ~0.03 on the same protocol).
 
 ## Notes
 

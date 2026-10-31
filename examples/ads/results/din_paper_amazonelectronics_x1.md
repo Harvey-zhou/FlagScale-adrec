@@ -96,13 +96,18 @@ The model overfits from epoch 8 on (train loss 0.367 → 0.088 while test gAUC
 falls 0.8555 → 0.7968).  The reported number is the best checkpoint, which is
 what the authors' code restores before its final test pass.
 
-### Against the three available targets
+### Against the available targets
 
-| Target | gAUC | This run |
+| Target | gAUC | This run (paper structure) |
 | --- | --- | --- |
 | Paper Table 3 (DIN, PReLU) | 0.8818 | −0.0263 |
 | Authors' README (their own run of this code) | 0.8698 | −0.0143 |
-| BARS/FuxiCTR `din.yaml` on this data | 0.8835 | −0.0280 |
+| BARS/FuxiCTR `din.yaml` on this data (fresh run, batch 1024) | 0.8823 | −0.0280 |
+| Released DIN structure, this repo (50 epochs) | 0.8696 | −0.0002 vs the README |
+
+The BARS figure is from a fresh run of `din.yaml` on this tree (9 epochs, test
+AUC 0.8846 / logloss 0.4296); the older `flagscale-adrec-20261014` snapshot
+reported 0.8835, within run-to-run variation.
 
 The authors' own README reports 0.8698 with the released code on the same kind
 of split, so the paper's 0.8818 is not reproducible as published even by its
@@ -117,7 +122,7 @@ it.
   code assigns `lr = 0.1` once, so the rate stays at 0.1; `min_lr: 0.1` now
   reproduces that.  Up to epoch ~10 both runs are identical (same seed), which is
   why the best number is unchanged — the model overfits after epoch 7 either way.
-* **Gap to the authors' 0.8698 — candidate causes, none verified.**  Compared
+* **Gap to the authors' 0.8698 — the structure explains it (verified by ablation).**  Compared
   with the released TensorFlow model (`din/model.py`), the differences are:
   (a) it applies `batch_normalization` + `dense(128)` (`hist_bn` / `hist_fcn`)
       to the pooled history and feeds the MLP `[u, i, u*i]` with a BatchNorm on
@@ -131,12 +136,13 @@ it.
   optimiser (SGD 1.0, batch 32 in both) and user embeddings — `user_emb_w` is
   declared in `din/model.py` but **never used**, unlike the base model in the
   same repository.
-  Ablation status (three epochs each, identical protocol): the embedding
+  Ablations (three epochs each, identical protocol): the embedding
   initialisation makes no difference (≤0.002), the sigmoid activation alone is
-  0.010–0.023 **worse**, and the released structural cluster closes the gap —
-  0.8597 / 0.8678 / 0.8696 at epochs 1–3, against 0.8245 / 0.8344 / 0.8400 for
-  the paper structure and the authors' README 0.8698.  So the missing pieces are
-  structural; which of them matters is not yet isolated.
+  0.010–0.023 **worse**, and the released structure reproduces the authors'
+  README (0.8696 vs 0.8698).  The decomposition below shows the effective
+  pieces are the `[u, i, u*i]` final-MLP input, the `hist_fcn` projection and
+  the input BatchNorm; activation and softmax make no difference inside the
+  cluster.
 * **Model selection uses the test split** because the released split has no
   validation set — the authors' `_eval` does the same.  The number is therefore
   best-over-epochs test gAUC, not an untouched held-out score.
@@ -183,35 +189,42 @@ still off), so it isolates the authors' activation:
 Sigmoid is consistently 0.010–0.023 **worse**, so switching to the authors'
 activation does not close the gap in this structure.
 
-### Released model structure — supported
+### Released model structure — decomposed
 
-The second 3-epoch arm applies the released model's whole cluster at once:
-sigmoid, softmax with the authors' `sqrt(d)` scaling, `hist_fcn` (BatchNorm +
-dense 128 after the pooled history), `[u, i, u*i]` MLP input and BatchNorm on
-that input.
+The full cluster (sigmoid, softmax with `sqrt(d)` scaling, `hist_bn`/`hist_fcn`,
+`[u, i, u*i]` input, BatchNorm on that input) and five arms that each drop one
+piece, three epochs each:
 
-| Epoch | Paper structure (PReLU) | sigmoid only | released structure |
+| Arm | Epoch 1 | Epoch 2 | Epoch 3 |
 | --- | --- | --- | --- |
-| 1 | 0.8245 | 0.8015 | **0.8597** |
-| 2 | 0.8344 | 0.8206 | **0.8678** |
-| 3 | 0.8400 | 0.8304 | **0.8696** |
+| **full released cluster** | **0.8597** | **0.8678** | **0.8696** |
+| − `hist_fcn` | 0.8529 | 0.8638 | 0.8684 |
+| − `[u, i, u*i]` input (back to concat) | 0.8401 | 0.8562 | 0.8640 |
+| − input BatchNorm | 0.5205 | 0.7763 | 0.8533 |
+| − softmax | 0.8575 | 0.8662 | 0.8695 |
+| − sigmoid (PReLU) | 0.8572 | 0.8647 | 0.8706 |
+| paper structure (reference) | 0.8245 | 0.8344 | 0.8400 |
 
-After three epochs the released structure is at 0.8696 — the authors' README
-reports 0.8698 for their full run — while the paper's described structure is
-0.030 behind at the same epoch.  This is the first candidate that actually
-closes the gap, and it does so with the same optimiser, batch size and learning
-rate as the paper run.
+What the decomposition says:
 
-Which piece of the cluster matters (the `hist_bn`/`hist_fcn` projection, the
-`[u, i, u*i]` input, the input BatchNorm, or the softmax scaling) has **not**
-been decomposed; the arm changes them together.  `din.py` exposes
-`model.hist_fcn`, `model.dnn_input`, `model.input_bn` and
-`model.attention_scale` so they can be split later; all default to the paper
-structure, so `din.yaml` and the 50-epoch run are unaffected.
+* the **`[u, i, u*i]` final-MLP input** is the largest single piece (removing it
+  costs 0.006–0.020), followed by the **`hist_fcn` projection** (0.001–0.007);
+* the **input BatchNorm** is a stability device rather than an accuracy one:
+  without it epoch 1 collapses to 0.52 and only recovers to 0.853 by epoch 3;
+* **softmax and the activation make no difference inside the cluster** (removing
+  either moves the metric by <0.002), which is consistent with sigmoid alone
+  being *worse* than PReLU on the paper structure;
+* this is evidence about *this* pipeline, not a claim that the paper's text is
+  wrong: the released code is what produced 0.8698/0.8818.
 
-A full 50-epoch run of the released structure was started on 2026-10-30 17:38
-(card 2, `din_author_full`) to obtain the final number; its result will replace
-this paragraph.
+A full 50-epoch run of the released structure peaked at **gAUC 0.8696 / AUC
+0.8720 at epoch 3** (test) and then overfitted to 0.8214 by epoch 50 — the
+authors' README 0.8698 is reproduced to 0.0002.  Runtime 16 h 40 m, mean 2,204
+samples/s.
+
+`din.py` exposes `model.hist_fcn`, `model.dnn_input`, `model.input_bn` and
+`model.attention_scale` for these arms; all default to the paper structure, so
+`din.yaml` and the 50-epoch run are unaffected.
 
 ## Artifacts
 
