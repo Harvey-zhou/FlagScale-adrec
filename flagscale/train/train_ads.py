@@ -232,7 +232,9 @@ class ExperimentLogger:
 def train_epoch(model: nn.Module, loader, epoch: int, device: torch.device, optimizer: torch.optim.Optimizer,
                 embedding_parameters: list[nn.Parameter], embedding_regularizer: float, max_grad_norm: float,
                 dtype_name: str, platform: Any, log_every: int,
-                schedule: "LRSchedule | None" = None, start_step: int = 0) -> dict[str, float]:
+                schedule: "LRSchedule | None" = None, start_step: int = 0,
+                ema_state: dict[str, torch.Tensor] | None = None, ema_decay: float = 0.0,
+                ema_model: nn.Module | None = None) -> dict[str, float]:
     model.train()
     sampler = getattr(loader.sampler, "sampler", loader.sampler)
     if hasattr(sampler, "set_epoch"):
@@ -254,6 +256,16 @@ def train_epoch(model: nn.Module, loader, epoch: int, device: torch.device, opti
         if max_grad_norm > 0:
             nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
         optimizer.step()
+        if ema_state is not None:
+            # DCN-V2 paper 7.1.3: an exponential moving average (decay 0.9999)
+            # of the trained parameters is evaluated and exported.
+            with torch.no_grad():
+                for name, value in ema_model.state_dict().items():
+                    target = ema_state[name]
+                    if target.dtype.is_floating_point:
+                        target.mul_(ema_decay).add_(value.detach(), alpha=1.0 - ema_decay)
+                    else:
+                        target.copy_(value)
         detached = loss.detach().float()
         total = detached if total is None else total + detached
         steps += 1
@@ -382,6 +394,10 @@ def train(config: DictConfig) -> None:
         for group in optimizer.param_groups:
             group["lr"] = schedule.lr_at(0)
     embedding_regularizer = float(optim_cfg.get("embedding_regularizer", 0.0))
+    ema_decay = float(train_cfg.get("ema_decay", 0.0))
+    ema_state = None
+    if ema_decay > 0:
+        ema_state = {name: value.detach().clone() for name, value in base_model.state_dict().items()}
     max_grad_norm = float(optim_cfg.get("max_gradient_norm", 10.0))
     epochs = int(train_cfg.get("epochs", 100))
     patience = int(train_cfg.get("early_stop_patience", 2))
@@ -400,7 +416,8 @@ def train(config: DictConfig) -> None:
         epoch_start_lr = float(optimizer.param_groups[0]["lr"])
         stats = train_epoch(model, train_loader, epoch, device, optimizer, embedding_parameters,
                             embedding_regularizer, max_grad_norm, dtype_name, platform, log_every,
-                            schedule if fixed_schedule else None, global_step)
+                            schedule if fixed_schedule else None, global_step,
+                            ema_state=ema_state, ema_decay=ema_decay, ema_model=base_model)
         global_step = int(stats["end_step"])
         record: dict[str, Any] = {"epoch": epoch, "train": stats, "lr": epoch_start_lr,
                                   "end_lr": stats["end_lr"], "global_step": global_step}
@@ -409,6 +426,10 @@ def train(config: DictConfig) -> None:
         # broadcast through the device.
         decision = torch.zeros(2, dtype=torch.float32)
         if rank_zero():
+            restore = None
+            if ema_state is not None:
+                restore = {name: value.detach().clone() for name, value in base_model.state_dict().items()}
+                base_model.load_state_dict(ema_state)
             valid = evaluate(base_model, valid_loader, device, dtype_name, platform, group_key)
             record["valid"] = valid
             value = float(valid[monitor])
@@ -433,6 +454,8 @@ def train(config: DictConfig) -> None:
                         **{f"valid/{k}": v for k, v in valid.items()}}, step=epoch)
             log(f"epoch={epoch} loss={stats['loss']:.6f} samples_per_s={stats['samples_per_s']:.0f} "
                 f"lr={epoch_start_lr:.6g} step={global_step} valid: {fmt(valid)}")
+            if restore is not None:
+                base_model.load_state_dict(restore)
         if dist.is_available() and dist.is_initialized():
             shared = decision.to(device)
             dist.broadcast(shared, src=0)
@@ -466,6 +489,7 @@ def train(config: DictConfig) -> None:
             "model": str(model_cfg.model_type), "dataset": meta.get("name"), "device": str(device),
             "device_type": device_type, "world_size": world_size, "torch_version": torch.__version__,
             "parameters": parameters, "monitor": monitor, "valid_split": valid_split,
+            "ema_decay": ema_decay,
             "optimizer": {"name": str(optim_cfg.get("name", "adam")), "lr": float(optim_cfg.lr),
                           "momentum": float(optim_cfg.get("momentum", 0.0)),
                           "weight_decay": float(optim_cfg.get("weight_decay", 0.0)),

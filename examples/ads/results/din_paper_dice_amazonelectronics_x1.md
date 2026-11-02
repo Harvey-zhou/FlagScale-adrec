@@ -78,6 +78,27 @@ released structure is worth ~0.03 on the same protocol).
 * Same data, metric and test-set model selection as the DIN run: the released
   split has no validation set.
 
+## Released structure (Dice)
+
+The paper's 0.8871 row was produced by `model_dice.py`, which keeps **sigmoid**
+in the attention MLP, uses Dice only in the DNN, still normalises the attention
+with softmax after `sqrt(d)`, and applies `hist_bn`/`hist_fcn`, `[u, i, u*i]`
+and BatchNorm on that input.  Config `din_dice_author.yaml` keeps the same
+protocol and switches those pieces on:
+
+| Epoch | gAUC | AUC |
+| --- | --- | --- |
+| 1 | 0.8597 | 0.8614 |
+| **2 (best)** | **0.8658** | **0.8681** |
+| 3 | NaN | 0.500 |
+
+The run diverged to NaN at epoch 3 (constant SGD 0.1 with Dice), so the best
+checkpoint is epoch 2.  0.8658 is +0.0083 over the paper-structure Dice run
+(0.8575) and within 0.004 of the PReLU released-structure run (0.8696 at epoch
+3) — i.e. Dice and PReLU are indistinguishable in this structure, and the
+paper's 0.8871 remains ~0.02 out of reach, the same gap the paper structure
+shows on this data/implementation.
+
 ## Artifacts
 
 | File | Contents |

@@ -24,10 +24,12 @@ matters.
 | DeepFM / Criteo_x1 | `deepfm_paper` | 4096 | 6 | **110,230** | 110,329 | 29 min 57 s |
 | DIN / Amazon Electronics | `din_paper` | 32 | 50 | **2,755** | 2,882 | 13 h 41 m |
 | DIN / Amazon Electronics | `din_paper_dice` | 32 | 50 | 2,109 | 2,158 | 17 h 13 m |
-| LightGCN / Gowalla | `lightgcn_paper` | 1024 | 814 (running) | 3,225 | 3,225 | 57 h so far |
+| LightGCN / Gowalla | `lightgcn_paper` | 1024 | 1000 | 3,224 | 3,225 | 69 h 56 m |
 | DIN / Amazon Electronics | `din` (BARS, batch 1024) | 1024 | 9 | **8,493** | 8,493 | 46 min |
+| DCN-Mix / Criteo_x1 | `dcn_mix_paper` | 512 | blocked | | | vendor JIT (bmm) failed; fixed to 2-D matmuls, waiting for a free card |
 | DIN / Amazon Electronics | `din_paper_bf16` (BF16) | 32 | 1 | **3,243** | 3,243 | 13 min 24 s |
 | DIN / Amazon, released structure | `din_author_full` | 32 | 50 | 2,204 | 2,213 | 16 h 36 m |
+| DIN / Amazon, released structure + Dice | `din_dice_author` | 32 | 10 | 2024 | 2,024 | 3 h 36 m |
 
 The DIN paper protocol uses batch 32, so its samples/s is **not** comparable
 with the other vendors' batch-1024 column; the `din` BARS row exists precisely

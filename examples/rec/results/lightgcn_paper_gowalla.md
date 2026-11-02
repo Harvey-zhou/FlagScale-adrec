@@ -2,7 +2,9 @@
 
 | Field | Value |
 | --- | --- |
-| Status | **running** (started 2026-10-29 15:06:41 CST; epoch 267/1000 at 2026-10-30 09:48; 13 evaluations done) |
+| Status | **finished** (1,000 epochs) |
+| Started / finished | 2026-10-29 15:06:41 → 2026-11-01 13:02 (CST) |
+| Wall clock | 69 h 56 m (training 69 h 56 m summed over epochs) |
 | Config | `examples/rec/conf/train/lightgcn_paper.yaml` |
 | Protocol document | [../PAPER_PROTOCOLS.md](../PAPER_PROTOCOLS.md) |
 | Code commit | `da5195a` |
@@ -64,12 +66,18 @@ Evaluation happens every 20 epochs (the first row arrives after ~84 minutes).
 | 220 | 0.1748 | 0.1495 |
 | 240 | 0.1755 | 0.1504 |
 | 260 | 0.1766 | 0.1511 |
-| … | pending | pending |
-| 1000 | pending | pending |
+| 300 | 0.1765 | 0.1516 |
+| 400 | 0.1794 | 0.1531 |
+| 500 | 0.1802 | 0.1541 |
+| 600 | 0.1813 | 0.1549 |
+| 700 | 0.1806 | 0.1546 |
+| 800 | 0.1810 | 0.1550 |
+| 900 | 0.1826 | 0.1555 |
+| 1000 | 0.1820 | 0.1553 |
 
-The curve is still climbing, with the gains per 20 epochs shrinking (0.0148 at
-epoch 40, 0.0011 at epoch 260); the paper's 0.1823 comes from the full 1,000
-epochs.
+The curve is still moving at the end (best evaluated epoch 900: 0.1826/0.1555),
+which is why the paper's "1,000 epochs are sufficient" does not mean
+"converged".
 
 ## Cost (measured on this host)
 
@@ -87,12 +95,19 @@ identical `index_select` + `index_add` path.
 
 ## Results
 
-Interim (epoch 260): recall@20 **0.1766** / ndcg@20 **0.1511** against the
-paper's 0.1823 / 0.1555.  The metric is still rising at every evaluation, so this
-is not a final number.  At 252 s/epoch the remaining 733 epochs are ~51 h, i.e.
-completion around 2026-10-31 13:00 CST.  The final table (this run vs paper vs
-released code) and the full curve will replace this section when the run
-completes; per-epoch data is written to `history.json` after every evaluation.
+| Metric | This run (epoch 1000) | Best evaluated (900) | Paper Table 3 | Released code |
+| --- | --- | --- | --- | --- |
+| recall@20 | **0.1820** | 0.1826 | 0.1823 | 0.1824 |
+| ndcg@20 | **0.1553** | 0.1555 | 0.1555 | 0.1547 |
+| precision@20 | 0.0561 | — | — | — |
+| hit@20 | 0.5923 | — | — | — |
+
+The protocol (released code) reports the final epoch: recall@20 is 0.0003 below
+the paper and ndcg@20 0.0002 below; the best evaluated epoch (900) is 0.0003
+above the paper.  This is a reproduction within run-to-run variation.
+
+Training took 69 h 56 m at a mean of 3,224 samples/s (252 s/epoch, 792
+steps/epoch, batch 1024).
 
 ## Artifacts
 

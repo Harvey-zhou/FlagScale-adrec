@@ -47,6 +47,9 @@ class DCNMix(AdsModel):
             int(model_cfg.get("num_cross_layers", 3)),
             int(model_cfg.get("low_rank", 32)),
             int(model_cfg.get("num_experts", 4)),
+            str(model_cfg.get("cross_activation", "tanh")),
+            str(model_cfg.get("cross_gate", "softmax")),
+            str(model_cfg.get("cross_init", "xavier")),
         )
         self.parallel_dnn = MLPBlock(
             input_dim,

@@ -111,34 +111,70 @@ class CrossNetMix(nn.Module):
     ``LowRankMixtureCrossNet``.
     """
 
-    def __init__(self, in_features: int, layer_num: int, low_rank: int, num_experts: int) -> None:
+    def __init__(self, in_features: int, layer_num: int, low_rank: int, num_experts: int,
+                 activation: str = "tanh", gate: str = "softmax", kernel_init: str = "xavier") -> None:
         super().__init__()
         self.layer_num = layer_num
         self.num_experts = num_experts
-        self.U_list = nn.ParameterList([nn.Parameter(nn.init.xavier_normal_(
+        self.activation = str(activation).lower()
+        self.gate = str(gate).lower()
+        self.kernel_init = str(kernel_init).lower()
+        if self.activation not in {"tanh", "hard_tanh", "relu"}:
+            raise ValueError(f"Unsupported cross activation {self.activation!r}")
+        if self.gate not in {"softmax", "constant"}:
+            raise ValueError(f"Unsupported cross gate {self.gate!r}")
+        if self.kernel_init not in {"xavier", "he"}:
+            raise ValueError(f"Unsupported cross init {self.kernel_init!r}")
+
+        def initialise(tensor: torch.Tensor) -> torch.Tensor:
+            # DCN-V2 paper (7.1.3): kernels use He Normal; FuxiCTR uses Xavier.
+            if self.kernel_init == "he":
+                return nn.init.kaiming_normal_(tensor, a=0, mode="fan_in", nonlinearity="relu")
+            return nn.init.xavier_normal_(tensor)
+
+        self.U_list = nn.ParameterList([nn.Parameter(initialise(
             torch.empty(num_experts, in_features, low_rank))) for _ in range(layer_num)])
-        self.V_list = nn.ParameterList([nn.Parameter(nn.init.xavier_normal_(
+        self.V_list = nn.ParameterList([nn.Parameter(initialise(
             torch.empty(num_experts, in_features, low_rank))) for _ in range(layer_num)])
-        self.C_list = nn.ParameterList([nn.Parameter(nn.init.xavier_normal_(
+        self.C_list = nn.ParameterList([nn.Parameter(initialise(
             torch.empty(num_experts, low_rank, low_rank))) for _ in range(layer_num)])
-        self.gating = nn.ModuleList([nn.Linear(in_features, 1, bias=False) for _ in range(num_experts)])
+        # A constant gate (G_i == 1 / K) has no parameters, as in the paper's
+        # best Criteo setting; the softmax gate keeps FuxiCTR's behaviour.
+        self.gating = nn.ModuleList(
+            [nn.Linear(in_features, 1, bias=False) for _ in range(num_experts)]
+        ) if self.gate == "softmax" else nn.ModuleList()
         self.bias = nn.ParameterList([nn.Parameter(torch.zeros(in_features, 1)) for _ in range(layer_num)])
 
+    def _activate(self, value: torch.Tensor) -> torch.Tensor:
+        if self.activation == "tanh":
+            return torch.tanh(value)
+        if self.activation == "hard_tanh":
+            return torch.clamp(value, -1.0, 1.0)
+        return torch.relu(value)
+
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        x_0 = inputs.unsqueeze(2)
-        x_l = x_0
+        # 2-D matmuls only: the vendor runtime's JIT fails to compile the batched
+        # matmul (bmm) kernels for this shape, while mm works.  The arithmetic is
+        # identical to Eq. (3) of the paper.
+        x_0 = inputs
+        x_l = inputs
         for i in range(self.layer_num):
             experts, gates = [], []
             for expert in range(self.num_experts):
-                gates.append(self.gating[expert](x_l.squeeze(2)))
-                v_x = torch.tanh(torch.matmul(self.V_list[i][expert].t(), x_l))
-                v_x = torch.tanh(torch.matmul(self.C_list[i][expert], v_x))
-                uv_x = torch.matmul(self.U_list[i][expert], v_x)
-                experts.append((x_0 * (uv_x + self.bias[i])).squeeze(2))
-            experts_t = torch.stack(experts, 2)
-            gates_t = torch.stack(gates, 1)
-            x_l = torch.matmul(experts_t, gates_t.softmax(1)) + x_l
-        return x_l.squeeze(2)
+                if self.gate == "softmax":
+                    gates.append(self.gating[expert](x_l))                          # [B, 1]
+                v_x = self._activate(torch.matmul(x_l, self.V_list[i][expert]))      # [B, r]
+                v_x = self._activate(torch.matmul(v_x, self.C_list[i][expert].t()))  # [B, r]
+                u_x = torch.matmul(v_x, self.U_list[i][expert].t())                  # [B, d]
+                experts.append(x_0 * (u_x + self.bias[i].squeeze(-1)))               # [B, d]
+            stacked = torch.stack(experts, dim=1)                                    # [B, K, d]
+            if self.gate == "softmax":
+                weights = torch.stack(gates, dim=1).softmax(1)                       # [B, K, 1]
+            else:
+                weights = torch.full((x_0.size(0), self.num_experts, 1),
+                                     1.0 / self.num_experts, device=x_0.device, dtype=x_0.dtype)
+            x_l = (stacked * weights).sum(dim=1) + x_l
+        return x_l
 
 
 __all__ = ["CrossNetMix", "Dice", "FieldEmbedding", "MLPBlock"]

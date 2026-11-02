@@ -226,6 +226,32 @@ samples/s.
 `model.attention_scale` for these arms; all default to the paper structure, so
 `din.yaml` and the 50-epoch run are unaffected.
 
+### Additive decomposition — the pieces interact
+
+Starting from the paper structure and adding one piece at a time (3 epochs each):
+
+| Arm | Epoch 1 | Epoch 2 | Epoch 3 |
+| --- | --- | --- | --- |
+| paper structure | 0.8245 | 0.8344 | 0.8400 |
+| + `[u, i, u*i]` input | 0.8302 | 0.8366 | 0.8416 |
+| + `hist_fcn` | 0.8317 | 0.8345 | 0.8438 |
+| + input BatchNorm | 0.8485 | 0.8565 | 0.8644 |
+| + softmax | 0.8430 | 0.8566 | 0.8673 |
+| full released cluster | 0.8597 | 0.8678 | 0.8696 |
+
+The additive and subtractive views disagree about individual pieces:
+
+* from below, input BatchNorm (+0.024) and softmax (+0.027) are the largest
+  single additions;
+* from above (the removal table), softmax changes nothing and input BatchNorm
+  only costs the first epochs.
+
+So the pieces interact; no single change reproduces the cluster, and the
+ordering of the additive gains is not the ordering of the removal losses.  What
+is established is the cluster-level result: the released structure reproduces
+the authors' 0.8698, while the paper-text structure stays at 0.8400 after three
+epochs and 0.8555 at its 50-epoch best.
+
 ## Artifacts
 
 | File | Contents |
