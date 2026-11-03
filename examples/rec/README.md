@@ -69,6 +69,15 @@ VENDOR_ENV_SH=<script that activates the vendor torch> \
   bash examples/run-adrec-kunlunxin.sh rec lightgcn_yelp2018 0   # cards: 0 or 0,1
 ```
 
+Cambricon (vendor torch_mlu, device `mlu`; see [../CAMBRICON.md](../CAMBRICON.md)).
+Whether `torch.sparse.mm` runs on the MLU is not known yet: probe LightGCN with
+`sparse` first and fall back to `index_add` only if the probe fails:
+
+```bash
+ADREC_VENV=<env with torch_mlu> bash examples/run-adrec-cambricon.sh rec sasrec_beauty 0   # cards: 0 or 0,1
+SMOKE=1 ADREC_VENV=<env with torch_mlu> bash examples/run-adrec-cambricon.sh rec lightgcn 0 --propagation index_add
+```
+
 Outputs: `$FLAGOS_REC_CKPTS/<model>-<device>/checkpoint/{model.pt,config.json,metrics.json}`
 and an offline W&B run under `.../checkpoint/wandb`.
 `train.hardware.pin_memory` (or `FLAGSCALE_PIN_MEMORY`) turns page-locked host memory off

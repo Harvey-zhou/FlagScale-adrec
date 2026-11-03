@@ -63,6 +63,13 @@ VENDOR_ENV_SH=<script that activates the vendor torch> \
   bash examples/run-adrec-kunlunxin.sh ads din 0   # cards: 0 or 0,1
 ```
 
+Cambricon (vendor torch_mlu, device `mlu`; see [../CAMBRICON.md](../CAMBRICON.md)):
+
+```bash
+ADREC_VENV=<env with torch_mlu> bash examples/run-adrec-cambricon.sh ads din 0   # cards: 0 or 0,1
+SMOKE=1 ADREC_VENV=<env with torch_mlu> bash examples/run-adrec-cambricon.sh ads din 0   # operator probe
+```
+
 Outputs: `$FLAGOS_ADS_CKPTS/<model>-<device>/checkpoint/{model.pt,config.json,metrics.json}`
 and an offline W&B run under `.../checkpoint/wandb` (upload with
 `wandb sync <dir>` after `wandb login`).

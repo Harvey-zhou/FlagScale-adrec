@@ -23,8 +23,8 @@ def get_platform():
     """Get the current platform instance.
 
     Detection priority:
-    1. Environment variable FS_PLATFORM (e.g. "flagos", "cuda", "npu")
-    2. Auto-detect: flagos > cuda > npu > musa
+    1. Environment variable FS_PLATFORM (e.g. "flagos", "cuda", "npu", "mlu")
+    2. Auto-detect: flagos > cuda > npu > mlu > musa > txda
     """
     global _current_platform
     if _current_platform is not None:
@@ -42,14 +42,14 @@ def get_platform():
         return _current_platform
 
     # 2. Auto-detect in priority order
-    for name in ("flagos", "cuda", "npu", "musa", "txda"):
+    for name in ("flagos", "cuda", "npu", "mlu", "musa", "txda"):
         if name in PLATFORMS:
             _current_platform = PLATFORMS[name]
             return _current_platform
 
     raise RuntimeError(
         "No available platform detected. "
-        "Ensure CUDA, NPU (torch_npu), or MUSA (torch_musa) is installed."
+        "Ensure CUDA, NPU (torch_npu), MLU (torch_mlu) or MUSA (torch_musa) is installed."
     )
 
 

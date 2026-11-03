@@ -1,10 +1,11 @@
-"""Few-step smoke test for a rec model on cpu, cuda or Torch-FL.
+"""Few-step smoke test for a rec model on cpu, cuda, Torch-FL or a Cambricon MLU.
 
 Runs forward, backward and optimizer steps on real preprocessed batches plus
 one evaluation pass, without FlagScale or torchrun:
 
     python examples/rec/smoke.py --model lightgcn --device flagos --steps 3
     python examples/rec/smoke.py --config lightgcn_yelp2018 --device cuda --propagation index_add
+    python examples/rec/smoke.py --config sasrec_beauty --device mlu
 
 Kunlunxin's vendor torch reports its device as ``cuda``.
 """
@@ -17,7 +18,7 @@ import os
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--model", choices=["sasrec", "dssm", "lightgcn", "two_tower"], default=None)
 parser.add_argument("--config", default=None, help="name of conf/train/<name>.yaml (default: the model name)")
-parser.add_argument("--device", default="cpu", help="cpu, cuda or flagos")
+parser.add_argument("--device", default="cpu", help="cpu, cuda, flagos or mlu")
 parser.add_argument("--steps", type=int, default=3)
 parser.add_argument("--propagation", default=None, help="LightGCN: sparse or index_add")
 args = parser.parse_args()
@@ -26,6 +27,8 @@ if not (args.model or args.config):
 os.environ["FLAGSCALE_DEVICE"] = args.device
 if args.device.startswith("flagos"):
     import torch_fl  # noqa: F401  # must be imported before torch
+elif args.device.startswith("mlu"):
+    import torch_mlu  # noqa: F401  # registers the mlu device
 
 import torch  # noqa: E402
 from omegaconf import OmegaConf  # noqa: E402
@@ -43,7 +46,7 @@ def main() -> None:
     cfg = OmegaConf.load(os.path.join(CONF, f"{name}.yaml"))
     if args.propagation:
         cfg.model.propagation = args.propagation
-    device = torch.device(f"{args.device}:0" if args.device in {"cuda", "flagos"} else args.device)
+    device = torch.device(f"{args.device}:0" if args.device in {"cuda", "flagos", "mlu"} else args.device)
     data = build_rec_data(cfg.task, cfg.data, int(cfg.batch_size), int(cfg.get("eval_batch_size", 1024)),
                           pin_memory=False, seed=0)
     model = build_rec_model(str(cfg.model.model_type), cfg.model, data.meta, device)
