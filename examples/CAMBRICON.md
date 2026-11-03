@@ -8,7 +8,8 @@ The ads and rec models run on Cambricon cards through the vendor stack:
 its Cambricon backend is a separate track.  Model, loss, data and metric code
 are the ones used on CUDA.
 
-Status: adapter and launcher written, **not yet run on a Cambricon card**.
+Status: adapter, launcher and container wrapper written, **not yet run on a
+Cambricon card**.
 Everything marked TODO is filled in from the cluster.
 
 ## Cluster environment
@@ -54,9 +55,37 @@ this file lives in a public repository.
 | Vendor bundle | shared storage: drivers 6.2.29 and 6.5.52, `.deb` packages, cp312/pt2.12.1 wheels, five container tars, SDK docs |
 | Open items | clock cap above; stale `cambricon-mlu-driver-dkms 6.2.29` dpkg/dkms record; 26.08 image not yet loaded; no MagicMind (inference only, not needed for training) |
 
+## Entering the container
+
+The host's Python is 3.8 and FlagScale needs >= 3.10, so every run goes through
+the 26.08 image; `run-adrec-cambricon.sh` refuses to start on an older Python.
+[`cambricon-container.sh`](cambricon-container.sh) loads the image when needed,
+keeps one container per user (`adrec-cambricon-$USER`) and runs a command in it:
+
+```bash
+export CAMBRICON_IMAGE_TAR=<vendor bundle>/cambricon_pytorch_container-v26.08.0-torch2.12.1-torchmlu1.34.1-ubuntu24.04-py312.tar.gz
+export WORK_ROOT=/srv/<user>           # data and outputs; `/` has ~100 GB free
+PREFLIGHT_ONLY=1 bash examples/cambricon-container.sh bash examples/run-adrec-cambricon.sh ads din 0
+bash examples/cambricon-container.sh   # interactive shell
+bash examples/cambricon-container.sh --stop
+```
+
+It runs `sudo docker`, passes through every `/dev/cambricon*` character device
+(`PRIVILEGED=1` as a fallback), mounts this checkout, `WORK_ROOT` and, if
+present, `/flagos-ads` and `/flagos-rec` at their host paths, and forwards the
+launcher's variables (`PREFLIGHT_ONLY`, `SMOKE`, `ADREC_*`, ...).  Outputs
+written in the container are root-owned.
+
+| Container item | Value |
+| --- | --- |
+| Image reference after `docker load` | TODO |
+| Device passthrough enough, or `PRIVILEGED=1` needed | TODO |
+| Python with torch_mlu inside the image (`ADREC_VENV` / `CAMBRICON_ENV_SH`) | TODO |
+
 ## Order of work
 
-1. **Preflight**: `PREFLIGHT_ONLY=1 bash examples/run-adrec-cambricon.sh ads din 0`.
+1. **Preflight**: `PREFLIGHT_ONLY=1 bash examples/run-adrec-cambricon.sh ads din 0`
+   (inside the container, see above).
 2. **Operator probe**, per config, single card, 3 steps + 1 evaluation:
    * `SMOKE=1 ALLOW_CPU_FALLBACK=1 bash examples/run-adrec-cambricon.sh <module> <config> 0`
      lists every operator torch_mlu would run on the CPU, in one pass;

@@ -76,6 +76,14 @@ else
     exit 2
   fi
 fi
+# FlagScale needs Python >= 3.10.  The MLU590 host's system python is 3.8 with no NEUWARE, so
+# landing here usually means the script was started on the host instead of in the container.
+if ! "$PY" -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2>/dev/null; then
+  version=$("$PY" -c 'import platform; print(platform.python_version())' 2>/dev/null || echo unknown)
+  echo "$PY is Python $version; FlagScale needs >= 3.10." >&2
+  echo "Run inside the Cambricon container: bash examples/cambricon-container.sh bash $0 $*" >&2
+  exit 2
+fi
 
 # ---- vendor stack ------------------------------------------------------------------------
 # TODO(cluster): confirm the SDK location; the official containers usually set it already.
