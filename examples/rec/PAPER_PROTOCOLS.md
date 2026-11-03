@@ -26,13 +26,17 @@ Every value is tagged with its source:
 
 ## 1. Datasets
 
-Both datasets are the authors' released splits, verified against the paper
+All datasets are the authors' released splits, verified against the paper
 statistics (see [EVIDENCE.md](EVIDENCE.md)):
 
 | Dataset | Contents | Used by |
 | --- | --- | --- |
 | `movielens_1m_sasrec` | 6,040 users / 3,416 items / 999,611 interactions; 5-core; leave-one-out (train = `k=1..n-2`, validation = `n-1`, test = `n`); `max_len=200`; 1 positive + 100 fixed candidate negatives per evaluation | SASRec |
+| `beauty_sasrec` | 52,204 users / 57,289 items / 394,908 interactions; same split rules; `max_len=50` | SASRec |
+| `games_sasrec` | 31,013 users / 23,715 items / 287,107 interactions; same split rules; `max_len=50` | SASRec |
+| `steam_sasrec` | 334,730 users / 13,047 items / 3,686,172 interactions; same split rules; `max_len=50` | SASRec |
 | `gowalla_lightgcn` | 29,858 users / 40,981 items; 810,128 train + 217,242 test interactions (the NGCF/LightGCN split); no validation split | LightGCN |
+| `yelp2018_lightgcn` | 31,668 users / 38,048 items; 1,237,259 train + 324,147 test interactions; no validation split | LightGCN |
 
 ## 2. SASRec
 
@@ -49,8 +53,8 @@ statistics (see [EVIDENCE.md](EVIDENCE.md)):
 | self-attention blocks | 2 | `[paper]` IV-C | `model.num_blocks` |
 | heads | 1 | `[paper]` IV-F (two heads was worse) | `model.num_heads` |
 | latent size | 50 | `[code]` (paper Fig. 2: d ≥ 40 is satisfactory) | `model.hidden_size` |
-| dropout | 0.2 | `[paper]` IV-C (MovieLens-1m) | `model.dropout` |
-| max sequence length | 200 | `[paper]` IV-C | dataset `meta.json` (`max_len`) |
+| dropout | 0.2 on ML-1M, 0.5 on Beauty/Games/Steam | `[paper]` IV-C ("0.5 for the three sparser datasets") | `model.dropout` |
+| max sequence length | 200 on ML-1M, 50 on Beauty/Games/Steam | `[paper]` IV-C | dataset `meta.json` (`max_len`) |
 | item embeddings | shared between input and prediction | `[paper]` IV-C | `sasrec.py` |
 | positional embedding | learned | `[paper]` III-A | `sasrec.py` |
 | loss | BCE on each non-padded position, one fresh negative per position per epoch | `[paper]` III-E | `losses/rec.py`, `SequentialTrainDataset` |
@@ -72,7 +76,7 @@ time step").
 | learning rate | 1e-3 | `[paper]` 4.1.2 "default learning rate of 0.001" | `optimizer.lr` |
 | batch size | 1,024 | `[paper]` 4.1.2 "default mini-batch size of 1024" | `batch_size` |
 | weight decay (Adam) | 0 | `[paper]` the only regulariser is the L2 term in Eq. (15) | `optimizer.weight_decay` |
-| L2 on layer-0 embeddings | 1e-4 | `[paper]` 4.5: optimal λ for Gowalla | `optimizer.bpr_weight_decay` |
+| L2 on layer-0 embeddings | 1e-4 on Gowalla, 1e-3 on Yelp2018 | `[paper]` 4.5: per-dataset optimal λ (Eq. 15) | `optimizer.bpr_weight_decay` |
 | warmup / LR schedule / grad clipping | none | `[ours]` neither source uses them | — |
 | embedding size | 64 | `[paper]` 4.1.2 | `model.embedding_dim` |
 | layers | 3 | `[paper]` 4.1.2 / Table 3 | `model.num_layers` |
@@ -85,8 +89,9 @@ time step").
 | early stopping | disabled — see below | `[ours]` conflict, documented | `early_stop_patience: 0` |
 | seed | 2020 | `[code]` | `seed` |
 
-Paper target (Table 3, 3 layers): **recall@20 0.1823 / ndcg@20 0.1555**
-(released PyTorch code: 0.1824 / 0.1547).
+Paper target (Table 3, 3 layers): **Gowalla recall@20 0.1823 / ndcg@20 0.1555**
+(released PyTorch code: 0.1824 / 0.1547); **Yelp2018 recall@20 0.0639 /
+ndcg@20 0.0525**.
 
 ### Early stopping conflict
 
@@ -94,8 +99,9 @@ The paper says "the early stopping and validation strategies are the same as
 NGCF", and NGCF §4.2.3 defines that as stopping when validation recall@20 does
 not increase for 50 successive epochs.  But the distributed Gowalla split
 (`train.txt` / `test.txt`, the split the paper says it received from the NGCF
-authors) has **no validation file**, and the released code trains all 1,000
-epochs with no early stopping.  Carving 10% out of `train.txt` would change the
+authors) has **no validation file**, the released Yelp2018 split is
+train/test only as well, and the released code trains all 1,000 epochs with no
+early stopping.  Carving 10% out of `train.txt` would change the
 training data and would no longer reproduce the published numbers.
 
 We follow the released code: 1,000 epochs, test recall recorded every 20
@@ -106,9 +112,18 @@ the paper rule can be switched on the day a validation split is available.
 
 | Model | Protocol | Measured | Full run |
 | --- | --- | --- | --- |
-| SASRec | batch 128, eval every epoch | ~1.2 s/epoch (200 epochs in 244 s without per-epoch eval) | early stop decides; ~5–10 min |
-| LightGCN, batch 1024 (paper) | 792 steps/epoch | 319 ms/step, 252.7 s/epoch | **~70 h** |
-| LightGCN, batch 2048 (code) | 396 steps/epoch | 319 ms/step, 126.4 s/epoch | ~35 h |
+| SASRec / ML-1M | batch 128, eval every epoch | ~1.2 s/epoch (200 epochs in 244 s without per-epoch eval) | early stop decides; ~5–10 min |
+| SASRec / Beauty, Games, Steam | batch 128, eval every epoch | 5–7 s/epoch, 6.3–6.6 k samples/s | 15 min – 1 h 18 m (measured) |
+| LightGCN Gowalla, batch 1024 (paper) | 792 steps/epoch | 319 ms/step, 252.7 s/epoch | **~70 h** (measured) |
+| LightGCN Gowalla, batch 2048 (code) | 396 steps/epoch | 319 ms/step, 126.4 s/epoch | ~35 h (projected) |
+| LightGCN Yelp2018, batch 1024 (paper) | 1,209 steps/epoch | 435 ms/step, 526 s/epoch on an idle card (604 s/epoch in the live run) | **~146–168 h** |
+| LightGCN Yelp2018, batch 2048 (code) | 604 steps/epoch | 436 ms/step, 264 s/epoch | ~73 h (projected) |
+| LightGCN Yelp2018, batch 8192 | 151 steps/epoch | 462 ms/step, 70 s/epoch | ~19 h (projected) |
+
+The Yelp2018 step time was measured 2026-11-03 on an idle card with the real
+adjacency (2,474,518 directed edges, 3 layers); the per-step cost is flat in the
+batch size because propagation dominates: 242 ms forward + 242 ms backward for
+any batch.
 
 The per-step cost is dominated by the full-graph propagation (1,620,256 directed
 edges × 64 dims × 3 layers; 159 ms forward + 160 ms backward) and is
