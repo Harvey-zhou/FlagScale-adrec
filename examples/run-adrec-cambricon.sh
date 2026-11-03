@@ -30,7 +30,11 @@
 # Environment (cluster-specific defaults are marked TODO(cluster); fill them in on this branch):
 #   CAMBRICON_ENV_SH  optional: sourced first, for a host that activates the stack its own way
 #   ADREC_VENV        the venv/conda env holding torch + torch_mlu; tried in order: this
-#                     variable, <repo>/venv, then the python already on PATH
+#                     variable, <repo>/venv, /torch/venv3/pytorch (the 26.08 container), then
+#                     the python already on PATH
+#   FLAGSCALE_PIN_MEMORY  page-locked host memory for the data loaders: auto (default; on for
+#                     mlu), true or false.  The preflight checks it and stops if it is on but
+#                     does not work.
 #   NEUWARE_HOME      Cambricon SDK root (default /usr/local/neuware when it exists)
 #   ADREC_DATA_ROOT   datasets root (default /flagos-ads/datasets or /flagos-rec/datasets)
 #   ADREC_OUT_ROOT    checkpoints, logs and scratch (default $HOME/flagos-adrec-cambricon); keep
@@ -61,9 +65,10 @@ if [ -n "${CAMBRICON_ENV_SH:-}" ]; then
 fi
 
 # ---- interpreter -------------------------------------------------------------------------
-# TODO(cluster): add the cluster's torch_mlu env as a candidate once its path is known.
+# /torch/venv3/pytorch is the torch_mlu env inside the 26.08 container.  A login shell
+# activates it already; listing it also covers `docker exec ... bash -c` without a login.
 VENV=""
-for candidate in "${ADREC_VENV:-}" "$ROOT/venv"; do
+for candidate in "${ADREC_VENV:-}" "$ROOT/venv" /torch/venv3/pytorch; do
   if [ -n "$candidate" ] && [ -x "$candidate/bin/python" ]; then VENV=$candidate; break; fi
 done
 if [ -n "$VENV" ]; then
@@ -173,8 +178,16 @@ print("device count :", count, f"(expected {expected})")
 if not available:
     sys.exit("torch_mlu sees no MLU. Check the driver (cnmon), NEUWARE_HOME / LD_LIBRARY_PATH "
              "and MLU_VISIBLE_DEVICES.")
+# An exact match, not just enough cards: more cards than requested means MLU_VISIBLE_DEVICES
+# was ignored, so the run would not be on the cards it names and could land on cards that
+# another job is using.
+visible = os.environ.get("MLU_VISIBLE_DEVICES", "(unset)")
+if count > expected:
+    sys.exit(f"torch sees {count} card(s) but {expected} were requested "
+             f"(MLU_VISIBLE_DEVICES={visible}); the variable did not restrict the visible cards.")
 if count < expected:
-    sys.exit(f"torch sees {count} card(s) but {expected} were requested; check MLU_VISIBLE_DEVICES.")
+    sys.exit(f"torch sees {count} card(s) but {expected} were requested "
+             f"(MLU_VISIBLE_DEVICES={visible}); check the card indices against cnmon.")
 for index in range(count):
     try:
         name = torch.mlu.get_device_name(index)
@@ -188,18 +201,27 @@ for index in range(count):
     print(f"  mlu{index}: {name}, {memory}")
 probe = torch.randn(256, 256, device="mlu")
 print("fp32 matmul  : ok", float((probe @ probe).sum()))
-# The training loop aggregates per-epoch statistics; both of these are guarded in the code,
-# so a "no" here is a note, not a blocker.
+# The training code keeps fp64 off the card (cross-rank statistics are reduced in fp32, metrics
+# are computed in numpy), so a "no" here is a note, not a blocker.
 try:
     torch.zeros(3, dtype=torch.float64, device="mlu").sum().item()
     print("fp64 on card : yes")
 except Exception as exc:
     print("fp64 on card : NO --", type(exc).__name__, str(exc)[:120])
+# Page-locked host memory is on by default for mlu (platform_mlu.supports_pin_memory), so it
+# is probed through the same DataLoader path the training code uses, and a failure stops the
+# launch unless the run turns it off.
+pin_setting = os.environ.get("FLAGSCALE_PIN_MEMORY", "auto").strip().lower()
+pin_off = pin_setting in {"0", "false", "no", "off"}
 try:
-    pinned = torch.zeros(16).pin_memory().is_pinned()
-    print("pinned host  :", "yes (FLAGSCALE_PIN_MEMORY=true may be used)" if pinned else "no")
+    loader = torch.utils.data.DataLoader([torch.zeros(16)], batch_size=None, pin_memory=True)
+    pinned, pin_error = next(iter(loader)).is_pinned(), ""
 except Exception as exc:
-    print("pinned host  : NO --", type(exc).__name__, str(exc)[:120])
+    pinned, pin_error = False, f" -- {type(exc).__name__}: {str(exc)[:120]}"
+print("pinned host  :", "yes" if pinned else "NO" + pin_error,
+      f"(FLAGSCALE_PIN_MEMORY={pin_setting})")
+if not pinned and not pin_off:
+    sys.exit("page-locked host memory does not work here; rerun with FLAGSCALE_PIN_MEMORY=false.")
 is_cncl_available = getattr(torch.distributed, "is_cncl_available", None)
 cncl = bool(is_cncl_available and is_cncl_available())
 print("cncl         :", "yes" if cncl else "NO")

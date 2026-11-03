@@ -80,6 +80,8 @@ class PlatformMLU(PlatformBase):
     def amp_device_type(self) -> str:
         return "mlu"
 
-    # supports_pin_memory() keeps the base default (False) until page-locked host
-    # memory is confirmed on the cluster: run-adrec-cambricon.sh's preflight
-    # reports it, and FLAGSCALE_PIN_MEMORY=true turns it on.
+    def supports_pin_memory(self) -> bool:
+        # Page-locked host memory works on MLU590-M9 with torch_mlu 1.34.1
+        # (preflight, examples/CAMBRICON.md).  The preflight re-checks it on every
+        # launch; FLAGSCALE_PIN_MEMORY=false turns it off.
+        return True

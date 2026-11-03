@@ -29,9 +29,9 @@ host, driver and image rows were verified on 2026-11-03 with `cnmon`,
 | Python | 3.12.3 in the image (`/torch/venv3/pytorch`), 3.8.10 on the host | preflight.log |
 | torch / torch_mlu | 2.12.1+cpu / 1.34.1+torch2.12.1, exercised on card 0 | preflight.log |
 | fp64 on card | yes | preflight.log |
-| Page-locked host memory | yes (`FLAGSCALE_PIN_MEMORY=true` may be used) | preflight.log |
+| Page-locked host memory | yes, so it is on by default for `mlu` (`FLAGSCALE_PIN_MEMORY=false` turns it off) | preflight.log |
 | CNCL available | yes (`torch.distributed.is_cncl_available()`) | preflight.log |
-| `ADREC_VENV` (or env activation script) | `/torch/venv3/pytorch` inside the 26.08 container (the login shell already activates it) | preflight.log |
+| `ADREC_VENV` (or env activation script) | not needed: `/torch/venv3/pytorch` inside the 26.08 container is activated by the login shell and is also a launcher default | preflight.log |
 | Data root (`ADREC_DATA_ROOT`), md5 checked against EVIDENCE.md | `/srv/jiangxuhui/datasets`; `AmazonElectronics_x1` raw md5 `e9bf80b9…` / `57a20e82…` match EVIDENCE.md, encoded with `prepare_amazon_electronics_x1.py` | md5sum, prepare output |
 
 ## Host inventory
@@ -133,9 +133,19 @@ written in the container are root-owned.
   PyTorch's PrivateUse1 slot.  The adapter does not import torch_mlu when
   another backend already owns it, so a Torch-FL run on a host that also has
   torch_mlu installed is unaffected.
-* **Page-locked memory off by default** until the preflight shows it works;
-  `FLAGSCALE_PIN_MEMORY=true` turns it on.
+* **Runs only on the cards named.**  The preflight requires torch to see
+  exactly as many cards as were requested, so an ignored
+  `MLU_VISIBLE_DEVICES` stops the launch instead of running on cards another
+  job may hold.
+* **Page-locked memory on by default** (`platform_mlu.supports_pin_memory`),
+  since the first preflight showed it works.  Every preflight re-checks it
+  through a `DataLoader`, the same path the training code uses, and stops the
+  launch if it fails; `FLAGSCALE_PIN_MEMORY=false` turns it off.
 
-Not yet verified on the cluster: `MLU_VISIBLE_DEVICES` as the card selector,
-`torch.distributed.is_cncl_available()`, `torch.mlu.mem_get_info` and the
-fallback variable's name in the installed torch_mlu version.
+Verified on the cluster (2026-11-03): `torch.distributed.is_cncl_available()`,
+page-locked host memory, fp64.  Not yet verified: `MLU_VISIBLE_DEVICES` as the
+card selector (the stricter preflight above checks it on the next launch),
+`torch.mlu.mem_get_info` (the `mlu0:` line of preflight.log), and the fallback
+variable's name in torch_mlu 1.34.1 (no config so far has an operator without
+an MLU kernel, so `ENABLE_FALLBACK_TO_CPU=0` has not been exercised; the log
+scan covers it either way).
