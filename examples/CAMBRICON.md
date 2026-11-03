@@ -14,22 +14,45 @@ Everything marked TODO is filled in from the cluster.
 ## Cluster environment
 
 Most rows come straight from `<ADREC_OUT_ROOT>/<module>/logs/preflight.log`
-(`PREFLIGHT_ONLY=1 bash examples/run-adrec-cambricon.sh ads din 0`).
+(`PREFLIGHT_ONLY=1 bash examples/run-adrec-cambricon.sh ads din 0`).  The
+host, driver and image rows were verified on 2026-11-03 with `cnmon`,
+`modinfo` and a read of the vendor bundle.
 
 | Item | Value | Source |
 | --- | --- | --- |
-| Cluster / host | TODO | |
-| Card model and memory | TODO | `cnmon` in preflight.log |
-| Driver | TODO | `cnmon` |
-| NEUWARE / CNToolkit, CNNL, CNCL versions | TODO | |
-| Container image | TODO | |
-| Python | TODO | preflight.log |
-| torch / torch_mlu | TODO | preflight.log |
-| fp64 on card | TODO | preflight.log |
-| Page-locked host memory | TODO | preflight.log |
-| CNCL available | TODO | preflight.log |
+| Cluster / host | single node, 8× MLU590-M9 | `cnmon` |
+| Card model and memory | MLU590-M9, 98304 MiB (96 GiB) each | `cnmon` |
+| Driver | 6.5.52, firmware v1.5.0 | `cnmon`, `modinfo` |
+| NEUWARE / CNToolkit, CNNL, CNCL versions | host: no NEUWARE install; image: CNToolkit 4.7.6, CNNL 2.2.18, CNCL 1.30.10 | image `/var/cntoolkit-4.7.6`, vendor bundle |
+| Container image | `cambricon_pytorch_container-v26.08.0-torch2.12.1-torchmlu1.34.1-ubuntu24.04-py312.tar.gz` | vendor bundle |
+| Python | 3.12 in the image, 3.8.10 on the host | |
+| torch / torch_mlu | 2.12.1 / 1.34.1 in the image (not yet exercised on a card) | |
+| fp64 on card | TODO — needs a card run | preflight.log |
+| Page-locked host memory | TODO — the launcher keeps it off by default | preflight.log |
+| CNCL available | CNCL 1.30.10 shipped; `torch.distributed.is_cncl_available()` still TODO | preflight.log |
 | `ADREC_VENV` (or env activation script) | TODO | |
 | Data root (`ADREC_DATA_ROOT`), md5 checked against EVIDENCE.md | TODO | |
+
+## Host inventory
+
+Verified 2026-11-03.  Hostnames and network addresses are left out on purpose:
+this file lives in a public repository.
+
+| Item | Value |
+| --- | --- |
+| Node | 1 node, 8× MLU590-M9 |
+| OS / kernel | Ubuntu 20.04.6 LTS, 5.15.0-139-generic |
+| CPU | 2× Hygon C86 7390 (32 cores / 64 threads each), 128 threads, 8 NUMA nodes |
+| RAM | 2003 GiB |
+| MLU | 8× MLU590-M9, 96 GiB each, all healthy, ECC errors 0 |
+| MLU PCIe | Gen4 x16 per card, replay counter 0 |
+| MLU clock | 1200 MHz current vs 1600 MHz default — all cards capped (`Clock Setting: Active`) |
+| Driver / firmware | 6.5.52 (runfile install, DKMS-built), firmware v1.5.0, `mlumsgd` running |
+| Storage | `/` 437 GB (109 GB free), `/srv` 11 TB (5.9 TB free) |
+| Network | 11 mlx5 HCAs, RoCE interfaces up |
+| Docker | installed; the login user is not in the `docker` group, so container commands need `sudo` |
+| Vendor bundle | shared storage: drivers 6.2.29 and 6.5.52, `.deb` packages, cp312/pt2.12.1 wheels, five container tars, SDK docs |
+| Open items | clock cap above; stale `cambricon-mlu-driver-dkms 6.2.29` dpkg/dkms record; 26.08 image not yet loaded; no MagicMind (inference only, not needed for training) |
 
 ## Order of work
 
