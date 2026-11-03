@@ -8,9 +8,9 @@ The ads and rec models run on Cambricon cards through the vendor stack:
 its Cambricon backend is a separate track.  Model, loss, data and metric code
 are the ones used on CUDA.
 
-Status: adapter, launcher and container wrapper written.  First card run done
-on 2026-11-03: preflight plus the `ads`/`din` smoke on one MLU590-M9.  The
-`rec` configs and the multi-card runs are still TODO.
+Status: adapter, launcher and container wrapper written.  First card runs done
+on 2026-11-03: preflight plus the `ads` `din` / `deepfm` / `dcn_mix` smokes on
+one MLU590-M9.  The `rec` configs and the multi-card runs are still TODO.
 
 ## Cluster environment
 
@@ -32,7 +32,7 @@ host, driver and image rows were verified on 2026-11-03 with `cnmon`,
 | Page-locked host memory | yes, so it is on by default for `mlu` (`FLAGSCALE_PIN_MEMORY=false` turns it off) | preflight.log |
 | CNCL available | yes (`torch.distributed.is_cncl_available()`) | preflight.log |
 | `ADREC_VENV` (or env activation script) | not needed: `/torch/venv3/pytorch` inside the 26.08 container is activated by the login shell and is also a launcher default | preflight.log |
-| Data root (`ADREC_DATA_ROOT`), md5 checked against EVIDENCE.md | `/srv/jiangxuhui/datasets`; `AmazonElectronics_x1` raw md5 `e9bf80b9…` / `57a20e82…` match EVIDENCE.md, encoded with `prepare_amazon_electronics_x1.py` | md5sum, prepare output |
+| Data root (`ADREC_DATA_ROOT`), md5 checked against EVIDENCE.md | `/srv/jiangxuhui/datasets`; `AmazonElectronics_x1` raw md5 `e9bf80b9…` / `57a20e82…` and `Criteo_x1` `30b89c1c…` / `f73c71fb…` / `2c48b26e…` match EVIDENCE.md; encoded with the `prepare_*.py` scripts | md5sum, prepare output |
 
 ## Host inventory
 
@@ -105,8 +105,8 @@ written in the container are root-owned.
 | Config | Strict smoke | Ops on CPU with fallback on | Ops with no MLU kernel | Notes |
 | --- | --- | --- | --- | --- |
 | ads `din` | yes (exit 0, fallback off) | none | none | CNNL warns `cnnlMasked_v4` is deprecated; 3-step eval AUC 0.5667 (not a result) |
-| ads `deepfm` | TODO | | | |
-| ads `dcn_mix` | TODO | | | |
+| ads `deepfm` | yes (exit 0, fallback off) | none | none | Criteo_x1 33.0M/8.25M/4.59M; 23.4M parameters |
+| ads `dcn_mix` | yes (exit 0, fallback off) | none | none | Criteo_x1; 21.9M parameters |
 | rec `sasrec` | TODO | | | |
 | rec `two_tower` | TODO | | | |
 | rec `lightgcn` | TODO | | | `sparse` vs `index_add` |
