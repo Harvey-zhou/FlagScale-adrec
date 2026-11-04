@@ -38,6 +38,7 @@ matmul hangs.
 | DIN / Amazon, released structure | `din_author_full` | 32 | 50 | 2,204 | 2,213 | 16 h 36 m |
 | DIN / Amazon, released structure + Dice | `din_dice_author` | 32 | 10 | 2024 | 2,024 | 3 h 36 m |
 | Two-Tower / synthetic | `two_tower` | 32 | 1 | **984** | 984 | 12 s |
+| DIN / MovieLens-20M | `din_ml20m` | 1024 | 9 | **8,056** | 8,059 | 12 h 19 m |
 | DCN-Mix / MovieLens-1M | `dcn_mix_ml1m_paper` | 128 | 32 | **8,200** | 8,243 | 39 min |
 | DSSM / MovieLens-1M | `dssm` | 4096 | 10 | **179,419** | 180,950 | 3 m 51 s |
 | DSSM / MovieLens-20M | `dssm_ml20m` | 4096 | 10 | **183,900** | 183,828 | ~1.2 h |
@@ -94,6 +95,7 @@ below is the same config, seed and epoch budget as its FP32 counterpart.
 | DSSM / MovieLens-20M | Hit@100 0.1647 | 0.1627 | −0.0020 | 183,777 | 179,481 |
 | DIN / Amazon (paper, 50 ep) | gAUC 0.8645 / 0.4714 | 0.8625 / 0.4683 | −0.0020 | 5,438 | 5,705 |
 | DIN / Amazon (1 epoch probe) | gAUC 0.8227 | 0.8230 | +0.0003 | 3,245 | 3,243 |
+| DIN / MovieLens-20M | gAUC 0.9839 | running | — | 8,056 | 7,841 |
 
 Reading of the table:
 
