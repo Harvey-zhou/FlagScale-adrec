@@ -38,6 +38,9 @@ matmul hangs.
 | DIN / Amazon, released structure | `din_author_full` | 32 | 50 | 2,204 | 2,213 | 16 h 36 m |
 | DIN / Amazon, released structure + Dice | `din_dice_author` | 32 | 10 | 2024 | 2,024 | 3 h 36 m |
 | Two-Tower / synthetic | `two_tower` | 32 | 1 | **984** | 984 | 12 s |
+| DCN-Mix / MovieLens-1M | `dcn_mix_ml1m_paper` | 128 | 32 | **8,200** | 8,243 | 39 min |
+| DSSM / MovieLens-1M | `dssm` | 4096 | 10 | **179,419** | 180,950 | 3 m 51 s |
+| DSSM / MovieLens-20M | `dssm_ml20m` | 4096 | 10 | **183,900** | 183,828 | ~1.2 h |
 
 The DIN paper protocol uses batch 32, so its samples/s is **not** comparable
 with the other vendors' batch-1024 column; the `din` BARS row exists precisely
