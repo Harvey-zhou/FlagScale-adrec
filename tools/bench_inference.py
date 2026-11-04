@@ -20,6 +20,8 @@ Examples::
         --data /data2/jiangxuhui/datasets/rec/movielens_1m_sasrec
     python tools/bench_inference.py --task graph --checkpoint <dir> \
         --data /data2/jiangxuhui/datasets/rec/gowalla_lightgcn
+    python tools/bench_inference.py --task two_tower --checkpoint <dir> \
+        --data /data2/jiangxuhui/datasets/rec/movielens_20m_dssm
 
 Add ``--dtype bf16`` to run the forward pass under ``torch.autocast`` (the
 capability probe for BF16 inference).
@@ -47,7 +49,7 @@ from flagscale.train.datasets.rec import build_rec_data
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--task", choices=["ads", "sequential", "graph"], required=True)
+    parser.add_argument("--task", choices=["ads", "sequential", "graph", "two_tower"], required=True)
     parser.add_argument("--checkpoint", required=True, help="directory with model.pt and config.json")
     parser.add_argument("--data", required=True, help="dataset directory")
     parser.add_argument("--batch-size", type=int, default=8192)
@@ -93,12 +95,30 @@ def main() -> None:
     model.load_state_dict(state)
     model.eval()
 
+    # Two-tower retrieval: the item index is precomputed once (it is the served
+    # catalogue, not per-request compute), then each timed pass streams user
+    # batches through the user tower and scores them against that index.
+    item_index = None
+    if args.task == "two_tower":
+        vectors = []
+        with torch.no_grad(), autocast(device, args.dtype):
+            for batch in data.items:
+                vectors.append(model.item_embedding(to_device(batch, device)))
+        item_index = torch.cat(vectors)
+        loader = data.test
+
     def one_pass() -> tuple[int, float]:
         rows = 0
         with torch.no_grad(), autocast(device, args.dtype):
             torch.cuda.synchronize() if device.type == "cuda" else None
             started = time.perf_counter()
-            if args.task == "graph":
+            if args.task == "two_tower":
+                for batch in loader:
+                    rows += int(next(iter(batch.values())).shape[0])
+                    moved = to_device(batch, device)                 # H2D
+                    users = model.user_embedding(moved)
+                    (users @ item_index.T).detach().to("cpu", non_blocking=False)  # D2H
+            elif args.task == "graph":
                 # The full-ranking score matrix is model compute; top-k and the
                 # metric stay excluded, so only the propagation + dot product
                 # are timed and each test user counts as one row.

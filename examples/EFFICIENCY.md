@@ -49,7 +49,8 @@ to give a like-for-like number.
 ## Inference throughput
 
 One warm-up pass + three timed passes, batch 8192 (ads) / 1024 (SASRec) /
-2048 (LightGCN).
+2048 (LightGCN) / 4096 (two-tower).  For the two-tower models the item index is
+built once before timing (it is the served catalogue, not per-request compute).
 
 | Model | Dataset | Rows per pass | FP32 s/pass | FP32 rows/s | BF16 s/pass | BF16 rows/s |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -57,29 +58,58 @@ One warm-up pass + three timed passes, batch 8192 (ads) / 1024 (SASRec) /
 | DeepFM | Criteo_x1 test (4,587,167) | 4,587,167 | 4.568 | **1,004,304** | 3.863 | 1,187,606 |
 | SASRec | MovieLens-1M test (6,040 users × 101 candidates) | 6,040 | 0.0675 | **89,455** | 0.200 | 30,488 |
 | LightGCN | Yelp2018 test (31,668 users, full ranking) | 31,668 | 0.247 | **128,344** | 0.250 | 126,532 |
+| DCN-Mix | MovieLens-1M test (73,901) | 73,901 | 0.0365 | **2,029,283** | 0.0522 | 1,413,111 |
+| DSSM | MovieLens-1M test (6,040 users, full catalogue) | 6,040 | 0.0456 | **124,180** | 0.0107 | 490,018 |
+| DSSM | MovieLens-20M test (138,493 users, full catalogue) | 138,493 | 8.62 | **16,063** | 4.56 | 30,355 |
 
 *Rows per pass* is one test example: an impression for the ads models, a user
 with its 101 candidates for SASRec, a user's full-catalogue ranking for
-LightGCN.
+LightGCN and for the two-tower models.
  
-**BF16 works, and whether it helps depends on the model**: autocast runs
-without error; DeepFM gains 18 % (1,187,606 rows/s), LightGCN is flat
-(−1.4 %, 126,532), while DIN loses 30 % and SASRec loses 66 %.  The small
-batch-32 / 1-head models fall back to conversion-heavy paths, the large
-embedding+MLP model does not.  This is a property of the vendor kernel mix, not
-of the models.
+**BF16 works, and whether it helps depends on the model and on what dominates
+the pass**: DSSM gains 2.0×/1.9× (the user-tower output times the item matrix is
+one big matmul, 490,018 and 30,355 rows/s), DeepFM gains 18 % (1,187,606),
+LightGCN is flat (−1.4 %, 126,532), DCN-Mix loses 30 % (1,413,111), DIN loses
+30 % and SASRec loses 66 %.  The small per-row models fall back to
+conversion-heavy paths; wide matmuls do not.  This is a property of the vendor
+kernel mix, not of the models.
 
-## BF16 status
+## BF16 training (mixed precision)
 
-| Item | Status |
-| --- | --- |
-| Inference autocast | works (`--dtype bf16`), 30–66 % slower |
-| Training autocast | works; one full epoch of the 2.6 M rows at batch 32: **3,243 samples/s** (804 s), epoch-1 gAUC 0.8230 vs 0.8245 for FP32 — numerically indistinguishable |
-| BF16 vs FP32 training | BF16 looks ~12–18 % faster at batch 32, but the FP32 reference is a 50-epoch mean under heavy contention (1,069–3,314 samples/s spread); a controlled same-load pair has not been run |
+`train.model.torch_dtype=bf16` runs the forward/loss under autocast with fp32
+master weights; every paper-protocol config keeps `fp32`, and each BF16 row
+below is the same config, seed and epoch budget as its FP32 counterpart.
 
-BF16 training is therefore usable on this stack, while BF16 *inference* is
-slower — the opposite direction, and both are properties of the vendor kernels
-rather than of the models.
+| Model / dataset | FP32 metric | BF16 metric | Δ | FP32 samples/s | BF16 samples/s |
+| --- | --- | --- | --- | --- | --- |
+| DeepFM / Criteo_x1 (paper) | AUC 0.8040 / 0.4477 | 0.8040 / 0.4478 | 0.0000 | 110,230 | 159,192 |
+| DCN-Mix / MovieLens-1M | AUC 0.8513 / 0.3680 | 0.8509 / 0.3682 | −0.0004 | 8,200 | 7,248 |
+| DCN-Mix / Criteo_x1 (paper) | AUC 0.8104 / 0.4411 | 0.8105 / 0.4410 | +0.0001 | 9,580 | 15,912 |
+| SASRec / MovieLens-1M | HR@10 0.8204 / NDCG 0.5910 | 0.8215 / 0.5940 | +0.0011 | 5,361 | 8,807 |
+| SASRec / Amazon Beauty | HR@10 0.4604 / NDCG 0.3034 | 0.4682 / 0.3104 | +0.0078 | ~6,300 | 11,456 |
+| LightGCN / Gowalla (1,000 ep) | recall@20 0.1820 / ndcg 0.1553 | running (epoch 20 identical: 0.1339 / 0.1160) | — | 3,224 | 3,225 |
+| LightGCN / Yelp2018 (1,000 ep) | running | running | — | 4,216 | 4,214 |
+| Two-Tower (synthetic) | loss 0.6923 / train 0.4402 | identical | 0 | 984 | 1,006 |
+| DSSM / MovieLens-1M | Hit@100 0.1921 | 0.1990 | +0.0069 | 179,419 | 174,542 |
+| DSSM / MovieLens-20M | Hit@100 0.1647 | 0.1627 | −0.0020 | 183,777 | 179,481 |
+| DIN / Amazon (paper, 50 ep) | gAUC 0.8645 | running | — | 5,438 | — |
+| DIN / Amazon (1 epoch probe) | gAUC 0.8227 | 0.8230 | +0.0003 | 3,245 | 3,243 |
+
+Reading of the table:
+
+* **BF16 does not change accuracy** where the trajectory is deterministic:
+  DeepFM is identical to five decimals and DCN-Mix moves by 0.0004.  Where the
+  number moves more (SASRec Beauty +0.0078, DSSM +0.0069) the early-stopping
+  epoch moved with it — SASRec Beauty ran to epoch 324 under BF16 against 275
+  under FP32 — so those are run-to-run differences, not precision loss.
+* **BF16 is not uniformly faster for training.**  At batch 128 (DCN-Mix) it is
+  12 % slower; at batch 4096 (DeepFM, SASRec) it is faster; LightGCN is exactly
+  flat because the cost is the full-graph `index_add` propagation, not a matmul.
+  The FP32 column is mostly measured under host contention, so these are
+  indicative rather than controlled speedups.
+* The older note in this file said 30–66 % slower *inference* across the board;
+  with the two-tower models measured, the statement is now model-dependent
+  (see the table above).
 
 ## Reproduction
 
