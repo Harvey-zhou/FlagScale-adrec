@@ -1,0 +1,59 @@
+# DCN-Mix paper protocol on MovieLens-1M -- Wang et al., DCN V2 (WWW 2021, arXiv:2008.13535).
+#
+# Dataset (§7.1.1, Table 3): MovieLens-1M, 740k samples, 7 features, 3.5k vocab;
+# ratings 1-2 -> 0, 4-5 -> 1, 3s removed, random 80/10/10 split.  Built by
+# examples/ads/prepare_movielens1m_ctr.py.
+#
+# Target (Table 6, mean of 5 runs): DCN-Mix LogLoss 0.3160 / AUC 0.8964
+# (110K parameters, 210K FLOPS).  The paper does not publish the per-dataset
+# "best setting" for MovieLens-1M in the text, so the cross/DNN shapes below
+# are [ours]: the same as the Criteo paper config.  Everything the paper does
+# state for this dataset is tagged [paper].
+#
+# Tags: [paper] stated in the paper
+#       [ours]  not stated for this configuration; a free choice
+name: dcn_mix_ml1m_paper
+seed: 2021                      # [ours]
+batch_size: 128                 # [paper 7.1.3] "batch size of 512 (128 for MovieLen)"
+eval_batch_size: 65536          # [ours] evaluation only
+epochs: 32                      # [paper 7.1.3] step budget searched includes 150k;
+                                # 32 x 4,619 steps = 147,808
+early_stop_patience: 0          # [paper] fixed step budget, no early stopping
+monitor: AUC                    # [paper Table 6] AUC / logloss
+log_every: 0
+output_dir: ${experiment.exp_dir}/checkpoint
+ema_decay: 0.9999               # [paper 7.1.3] "EMA with decay 0.9999"
+
+model:
+  model_type: dcn_mix
+  torch_dtype: fp32             # [ours]
+  embedding_dim: 30             # [paper 7.1.3] "39 for Criteo and 30 for MovieLen-1M"
+  num_cross_layers: 3           # [ours] Criteo's best depth; ML-1M value not published
+  num_experts: 4                # [ours] as above
+  low_rank: 64                  # [ours] Criteo's r=258/4 experts ~ 64.5
+  cross_activation: hard_tanh   # [ours] the paper's Criteo choice; ML-1M not stated
+  cross_gate: constant          # [ours] as above
+  cross_init: he                # [paper 7.1.3] "kernels initialized with He Normal"
+  parallel_dnn_hidden_units: [512, 512]  # [ours] the paper's Criteo (2, 512)
+  dnn_activations: relu         # [paper 3.3] ReLU-based DNN
+  net_dropout: 0.0              # [ours] the paper mentions no dropout
+  batch_norm: false             # [ours]
+
+data:
+  path: ${oc.env:FLAGOS_ADS_DATA,/flagos-ads/datasets}/movielens_1m_ctr
+  valid_split: valid
+  group_key: null
+  num_workers: 0
+  max_samples: null
+  eval_max_samples: null
+
+optimizer:
+  name: adam                    # [paper 7.1.3]
+  lr: 5.0e-4                    # [ours] paper narrows Adam to 1e-4..5e-4
+  weight_decay: 0.0             # [ours]
+  embedding_regularizer: 1.0e-5 # [ours] paper searches lambda in {0, 3e-5, 1e-4}
+  max_gradient_norm: 10.0       # [paper 7.1.3] "gradient clipping norm was 10"
+
+scheduler:
+  type: none                    # [ours] fixed learning rate
+  warmup_steps: 0

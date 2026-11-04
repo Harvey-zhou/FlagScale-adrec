@@ -232,6 +232,7 @@ class ExperimentLogger:
 def train_epoch(model: nn.Module, loader, epoch: int, device: torch.device, optimizer: torch.optim.Optimizer,
                 embedding_parameters: list[nn.Parameter], embedding_regularizer: float, max_grad_norm: float,
                 dtype_name: str, platform: Any, log_every: int,
+                loss_name: str = "bce",
                 schedule: "LRSchedule | None" = None, start_step: int = 0,
                 ema_state: dict[str, torch.Tensor] | None = None, ema_decay: float = 0.0,
                 ema_model: nn.Module | None = None) -> dict[str, float]:
@@ -250,7 +251,7 @@ def train_epoch(model: nn.Module, loader, epoch: int, device: torch.device, opti
             for group in optimizer.param_groups:
                 group["lr"] = learning_rate
         with autocast_context(device, dtype_name, platform):
-            loss = ctr_loss(model, batch, device, embedding_parameters, embedding_regularizer)
+            loss = ctr_loss(model, batch, device, embedding_parameters, embedding_regularizer, loss_name)
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
         if max_grad_norm > 0:
@@ -416,6 +417,7 @@ def train(config: DictConfig) -> None:
         epoch_start_lr = float(optimizer.param_groups[0]["lr"])
         stats = train_epoch(model, train_loader, epoch, device, optimizer, embedding_parameters,
                             embedding_regularizer, max_grad_norm, dtype_name, platform, log_every,
+                            str(train_cfg.get("loss", "bce")),
                             schedule if fixed_schedule else None, global_step,
                             ema_state=ema_state, ema_decay=ema_decay, ema_model=base_model)
         global_step = int(stats["end_step"])

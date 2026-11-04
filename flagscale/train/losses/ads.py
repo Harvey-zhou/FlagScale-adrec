@@ -34,11 +34,22 @@ def embedding_regularization(parameters: list[nn.Parameter], weight: float) -> T
 
 
 def ctr_loss(model: nn.Module, batch: dict[str, Tensor], device: torch.device,
-             embedding_parameters: list[nn.Parameter], embedding_regularizer: float) -> Tensor:
+             embedding_parameters: list[nn.Parameter], embedding_regularizer: float,
+             loss_name: str = "bce") -> Tensor:
+    """BCE (FuxiCTR) or MSE on the sigmoid output.
+
+    DCN-V2's MovieLens-1M protocol is stated as a regression problem with ratings
+    mapped to {0, 1} (paper 7.1.1), so ``loss_name: mse`` reproduces that
+    objective; every other config keeps ``bce``.
+    """
+
     batch = move_batch(batch, device)
     logits = model(batch)
-    # BCE on sigmoid outputs as in FuxiCTR, computed in the stable logit form.
-    loss = F.binary_cross_entropy_with_logits(logits, batch["label"].to(logits.dtype))
+    if str(loss_name).lower() == "mse":
+        loss = F.mse_loss(torch.sigmoid(logits), batch["label"].to(logits.dtype))
+    else:
+        # BCE on sigmoid outputs as in FuxiCTR, computed in the stable logit form.
+        loss = F.binary_cross_entropy_with_logits(logits, batch["label"].to(logits.dtype))
     return loss + embedding_regularization(embedding_parameters, embedding_regularizer)
 
 
