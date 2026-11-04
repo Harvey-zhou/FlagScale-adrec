@@ -56,11 +56,15 @@ class DSSM(RecModel):
         super().__init__(model_cfg, meta)
         dim = int(model_cfg.get("embedding_dim", 16))
         vocab = meta["vocab_sizes"]
-        self.tables = nn.ModuleDict({name: nn.Embedding(int(vocab[name]), dim) for name in USER_FIELDS + ITEM_FIELDS})
+        # torch-rechub's MovieLens-1M example uses five user features; a dataset
+        # without demographics (e.g. MovieLens-20M) lists its own fields here.
+        self.user_fields = tuple(model_cfg.get("user_fields", USER_FIELDS))
+        self.tables = nn.ModuleDict(
+            {name: nn.Embedding(int(vocab[name]), dim) for name in list(self.user_fields) + list(ITEM_FIELDS)})
         hidden = list(model_cfg.get("tower_hidden", [256, 128, 64]))
         activation = str(model_cfg.get("activation", "prelu"))
         dropout = float(model_cfg.get("dropout", 0.0))
-        self.user_tower = TowerMLP(dim * (len(USER_FIELDS) + 1), hidden, activation, dropout)
+        self.user_tower = TowerMLP(dim * (len(self.user_fields) + 1), hidden, activation, dropout)
         self.item_tower = TowerMLP(dim * len(ITEM_FIELDS), hidden, activation, dropout)
         self.temperature = float(model_cfg.get("temperature", 1.0))
         self.reset_parameters()
@@ -72,7 +76,7 @@ class DSSM(RecModel):
             nn.init.normal_(table.weight, 0.0, 1e-4)
 
     def user_embedding(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
-        fields = [self.tables[name](batch[name]) for name in USER_FIELDS]
+        fields = [self.tables[name](batch[name]) for name in self.user_fields]
         history = batch["hist_movie_id"]
         mask = (history != 0).to(fields[0].dtype)
         pooled = (self.tables["movie_id"](history) * mask.unsqueeze(-1)).sum(1) / (mask.sum(1, keepdim=True) + 1e-16)

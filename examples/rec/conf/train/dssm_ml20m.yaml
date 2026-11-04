@@ -1,0 +1,42 @@
+# DSSM two-tower on MovieLens-20M.
+#
+# Same recipe as `dssm.yaml` (torch-rechub examples/matching/run_ml_dssm.py:
+# embed 16, towers [256,128,64], PReLU, Adam 1e-4 weight_decay 1e-6, batch 4096,
+# 10 epochs, seed 2022), with one structural difference forced by the data:
+# MovieLens-20M has no user demographics (gender/age/occupation/zip), so the
+# user tower reads user_id plus the mean-pooled history only.  Dataset built by
+# examples/rec/prepare_movielens20m_dssm.py.
+#
+# No reference number exists for this pair (torch-rechub publishes 14.74% for
+# MovieLens-1M only); the 1M run is in results/dssm_movielens_1m.md.
+name: dssm_ml20m
+task: two_tower
+seed: 2022
+batch_size: 4096
+eval_batch_size: 4096
+epochs: 10
+eval_every: 1
+select_metric: hit@100
+topk: [10, 50, 100]
+log_every: 0
+output_dir: ${experiment.exp_dir}/checkpoint
+
+model:
+  model_type: dssm
+  torch_dtype: fp32
+  embedding_dim: 16
+  tower_hidden: [256, 128, 64]
+  activation: prelu
+  dropout: 0.0
+  temperature: 1.0            # torch-rechub accepts 0.02 but its forward never applies it
+  user_fields: [user_id]      # no demographics in MovieLens-20M
+
+data:
+  path: ${oc.env:FLAGOS_REC_DATA,/flagos-rec/datasets}/movielens_20m_dssm
+  num_workers: 2
+  max_samples: null
+  eval_max_samples: null
+
+optimizer:
+  lr: 1.0e-4
+  weight_decay: 1.0e-6
