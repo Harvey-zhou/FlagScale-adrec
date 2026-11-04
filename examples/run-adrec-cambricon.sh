@@ -237,7 +237,7 @@ print("platform     :", platform.name(), "/ backend", platform.dist_backend())
 if platform.name() != "mlu":
     sys.exit(f"FlagScale selected {platform.name()!r}, not 'mlu'.")
 PY
-} 2>&1 | tee "$LOGS/preflight.log"
+} 2>&1 | tee "$LOGS/preflight-$config.log"   # per config: concurrent launches share $LOGS
 rc=${PIPESTATUS[0]}
 if [ "$rc" -ne 0 ]; then echo "===== preflight failed (exit=$rc); not starting =====" >&2; exit "$rc"; fi
 if [ -n "${PREFLIGHT_ONLY:-}" ]; then echo "===== preflight only; done ====="; exit 0; fi

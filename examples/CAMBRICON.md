@@ -14,7 +14,9 @@ one MLU590-M9.  The `rec` configs and the multi-card runs are still TODO.
 
 ## Cluster environment
 
-Most rows come straight from `<ADREC_OUT_ROOT>/<module>/logs/preflight.log`
+Most rows come straight from the preflight log,
+`<ADREC_OUT_ROOT>/<module>/logs/preflight-<config>.log` (one per config so that
+concurrent launches do not overwrite each other; `preflight.log` before 2026-11-04)
 (`PREFLIGHT_ONLY=1 bash examples/run-adrec-cambricon.sh ads din 0`).  The
 host, driver and image rows were verified on 2026-11-03 with `cnmon`,
 `modinfo` and a read of the vendor bundle.
@@ -96,8 +98,10 @@ written in the container are root-owned.
    * LightGCN: probe the default `sparse` propagation first; if it fails, add
      `--propagation index_add` (smoke) / `train.model.propagation=index_add`
      (training), which is mathematically identical.
-3. **Full single-card runs**, compared with the CUDA baseline and the reference
-   numbers in `ads/EVIDENCE.md` / `rec/EVIDENCE.md`.
+3. **Full single-card runs**, compared with the same config's Kunlunxin P800 run
+   in `ads/results/` / `rec/results/` where one exists, and with the reference
+   numbers in `ads/EVIDENCE.md` / `rec/EVIDENCE.md`.  No CUDA run of these
+   configs is on record, so the P800 runs are the only measured comparison.
 4. **Two cards** (DDP over CNCL), e.g. `bash examples/run-adrec-cambricon.sh ads deepfm 0,1`.
 
 ## Operator probe results
@@ -108,14 +112,34 @@ written in the container are root-owned.
 | ads `deepfm` | yes (exit 0, fallback off) | none | none | Criteo_x1 33.0M/8.25M/4.59M; 23.4M parameters |
 | ads `dcn_mix` | yes (exit 0, fallback off) | none | none | Criteo_x1; 21.9M parameters |
 | rec `sasrec` | TODO | | | |
-| rec `two_tower` | TODO | | | |
+| rec `dssm` | TODO | | | the two-tower model of the six (torch-rechub, MovieLens-1M); `two_tower` is TorchRec's synthetic-data example and optional |
 | rec `lightgcn` | TODO | | | `sparse` vs `index_add` |
 
 ## Training results
 
-| Config | Cards | Test metric | CUDA baseline | Reference | Train samples/s | Notes |
+| Config | Cards | Test metric | P800 same config | Reference | Train samples/s | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | TODO | | | | | | |
+
+"P800 same config" is the Kunlunxin P800 run recorded in `ads/results/` or
+`rec/results/` (fp32, vendor torch 2.9.0).  It is a like-for-like comparison
+only when the training code has not changed in between:
+
+* comparable: `deepfm_paper`, `dcn_mix_paper`, `din_paper_dice`,
+  `sasrec_{beauty,games,steam}_paper`, `lightgcn_paper` (the config itself
+  pins `index_add`, as on the P800).  Options added after those runs default
+  to the old behaviour.
+* not comparable: `din_paper`.  The P800 run predates `e463e1e` and used
+  PyTorch's default PReLU slope 0.25; the current code initialises it to 0.
+  Compare it with the paper's 0.8818 only.
+* not checked: `sasrec_paper` (ML-1M) and `lightgcn_paper` were run at
+  `da5195a`, a commit missing from this branch's history.
+* no P800 run: the BARS configs (`din`, `deepfm`, `dcn_mix`), `sasrec`,
+  `dssm`, `lightgcn`; compare with the reference numbers.  The P800 run of
+  `lightgcn_yelp2018_paper` was still in progress on 2026-11-03.
+
+Throughput: the cards run capped at 1200 MHz (default 1600, see Host
+inventory), so record the clock with every samples/s figure.
 
 ## How the launcher keeps a run honest
 
@@ -145,7 +169,7 @@ written in the container are root-owned.
 Verified on the cluster (2026-11-03): `torch.distributed.is_cncl_available()`,
 page-locked host memory, fp64.  Not yet verified: `MLU_VISIBLE_DEVICES` as the
 card selector (the stricter preflight above checks it on the next launch),
-`torch.mlu.mem_get_info` (the `mlu0:` line of preflight.log), and the fallback
+`torch.mlu.mem_get_info` (the `mlu0:` line of the preflight log), and the fallback
 variable's name in torch_mlu 1.34.1 (no config so far has an operator without
 an MLU kernel, so `ENABLE_FALLBACK_TO_CPU=0` has not been exercised; the log
 scan covers it either way).
