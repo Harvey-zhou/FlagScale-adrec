@@ -61,22 +61,27 @@ on this 33M-row training set.
 
 ## Results
 
-| Metric | This run (best epoch 1) | BARS `deepfm.yaml` (11 epochs) | Paper (different split) |
+| Metric | This run (best epoch 1) | BARS `deepfm.yaml`, this host | Paper (different split) |
 | --- | --- | --- | --- |
-| test AUC | 0.8040 | 0.8137 | 0.8007 |
-| test logloss | 0.4477 | 0.4381 | 0.45083 |
-| valid AUC | 0.8036 | — | — |
+| test AUC | 0.8040 | 0.8112 | 0.8007 |
+| test logloss | 0.4477 | 0.4406 | 0.45083 |
+| valid AUC | 0.8036 | 0.8108 | — |
 
 Against the only comparable target on this data (BARS) the paper-settings run is
-0.0097 AUC lower and 0.0096 logloss higher, while it is close to the paper's own
+0.0072 AUC lower and 0.0071 logloss higher, while it is close to the paper's own
 number — but that number comes from a 90/10 split that cannot be reproduced, so
-it is context, not a target.
+it is context, not a target.  The BARS baseline was re-run on this host rather
+than quoted: it lands at 0.8112 / 0.4406 against the published 0.8137 / 0.4381,
+so a fifth of the gap the published number implied was the baseline being high
+(see [bars_baseline_criteo_x1.md](bars_baseline_criteo_x1.md)).
 
-**Why it underperforms BARS is not established.**  The paper-silent differences
-are BatchNorm, embedding L2 (both added by FuxiCTR) and the learning rate /
-early-stop rule (ours).  Any of them could matter; no ablation has been run.  A
-cheap next check would be a 2–3 epoch sweep of the learning rate (1e-4, 3e-4),
-since the model already peaks after one epoch at 1e-3.
+**Why it underperforms BARS is now explained.**  The learning rate and the two
+regularisers BARS adds were tested one at a time: lr 3e-4 gains only 0.0015 and
+BatchNorm changes nothing, but
+[the paper config + embedding L2 1e-5 reaches 0.8102](deepfm_paper_regularisation_criteo_x1.md)
+— 0.0010 from BARS, which additionally uses dropout 0.1 instead of 0.5.  The
+paper-protocol headline stays at 0.8040 because the paper describes dropout
+only; the ablation says what the missing regulariser is worth on this data.
 
 ## Notes
 

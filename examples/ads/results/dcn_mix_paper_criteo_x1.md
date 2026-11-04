@@ -76,22 +76,26 @@ converts to ~2.3 epochs on this split; we rounded up to 3.
 
 ## Results
 
-| Metric | This run (best epoch 3) | BARS `DCNv2_criteo_x1` (same split) | Paper (different split) |
+| Metric | This run (best epoch 3) | BARS `DCNv2_criteo_x1`, this host | Paper (different split) |
 | --- | --- | --- | --- |
-| test AUC | 0.810421 | 0.814195 | 0.8112 |
-| test logloss | 0.441089 | 0.437788 | 0.4408 |
-| valid AUC | 0.810169 | — | — |
+| test AUC | 0.810421 | 0.813934 | 0.8112 |
+| test logloss | 0.441089 | 0.437975 | 0.4408 |
+| valid AUC | 0.810169 | 0.813630 | — |
 
-0.0038 AUC below the BARS reference and 0.0033 logloss above it; the paper's
-numbers come from the day-based split and are context only.
+0.0035 AUC below the BARS reference and 0.0031 logloss above it; the paper's
+numbers come from the day-based split and are context only.  The BARS baseline
+was re-run on this host (0.8139 / 0.4380 against the published 0.8142 / 0.4378,
+see [bars_baseline_criteo_x1.md](bars_baseline_criteo_x1.md)), so the comparison
+is against a measured number rather than a quoted one.
 
 **What differs from BARS is mostly not paper-specified**: BARS uses
 embedding size 10, low-rank 32, a 500-500-500 DNN, dropout 0.1, Adam 1e-3 and
 batch 4096, while the paper's best setting (which we followed) is embedding 39,
-low-rank 64 per expert, a 512-512 DNN, Adam 5e-4 and batch 512.  The remaining
-gap has not been decomposed, and no ablation has been run.  The cheapest
-informative check is the learning rate: the paper narrows Adam to 1e-4–5e-4 and
-we took the top of that range, while BARS uses 1e-3.
+low-rank 64 per expert, a 512-512 DNN, Adam 5e-4 and batch 512.  The learning
+rate was checked first and it moves the right way when **lowered**:
+[lr 1e-4 gives 0.8115 / 0.4401](dcn_mix_paper_lr_ablation_criteo_x1.md), lr 1e-3
+gives 0.8075 / 0.4438.  The BARS hypothesis (its faster 1e-3 rate is better) is
+therefore falsified, and the remaining gap sits in the other five differences.
 
 ## Notes
 

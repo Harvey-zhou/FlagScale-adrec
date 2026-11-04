@@ -3,15 +3,15 @@
 | Field | Value |
 | --- | --- |
 | Status | **finished** (50 epochs; diverged to NaN at epoch 38, best checkpoint epoch 5) |
-| Started / finished | 2026-10-30 09:51 → 2026-10-31 03:11 (CST) |
-| Wall clock | 17 h 21 m end-to-end (17 h 13 m training across the 50 epochs) |
+| Started / finished | 2026-11-04 00:57:20 → 09:22 (CST) — rerun; the first run was 2026-10-30 09:51 → 10-31 03:11 |
+| Wall clock | 8 h 24 m (first run: 17 h 21 m) |
 | Config | `examples/ads/conf/train/din_paper_dice.yaml` |
 | Protocol document | [../DIN_PAPER_PROTOCOL.md](../DIN_PAPER_PROTOCOL.md) |
-| Code commit | `6b52a10` (includes `e463e1e`, PReLU/Dice slope init 0) |
+| Code commit | `dc5cb07` (first run: `6b52a10`) |
 | Device | Kunlunxin P800, card 6, vendor torch 2.9.0+cu128, fp32 |
 | Parameters | 4,152,226 (same shape as `din_paper`, PReLU replaced by Dice) |
-| Output | `/data2/jiangxuhui/logs/ads-paper-dice/ckpts/din_paper_dice-cuda/checkpoint/` |
-| Command | `launch-ads-paper.sh 6 din_paper_dice /data2/jiangxuhui/logs/ads-paper-dice` |
+| Output | `/data2/jiangxuhui/logs/adrec-runs/din-paper-dice-rerun/ads/ckpts/din_paper_dice-cuda/checkpoint/` |
+| Command | `run-adrec-kunlunxin.sh ads din_paper_dice 6` |
 
 ## Settings
 
@@ -29,7 +29,8 @@ Paper target (Table 3): **gAUC 0.8871** (paper's own TF run: 0.8711).
 
 ## Curve
 
-One epoch ≈ 15 min; the first row arrives ~15 minutes after the data load.
+One epoch ≈ 10 min on an idle card (≈ 605 s, 4,398 samples/s); the first run
+cost ~15 min per epoch because the card was shared.
 
 | Epoch | LR | Train loss | gAUC | AUC |
 | --- | --- | --- | --- | --- |
@@ -62,19 +63,42 @@ and it is recorded rather than hidden.
 
 ## Results
 
-Final (best epoch 5): gAUC **0.8575** / AUC 0.8587 / logloss 0.4816, versus
-0.8555 / 0.8564 for the PReLU run and the paper's 0.8871.  Dice is worth about
-+0.002 here, far from the paper's +0.0053 over DIN — but the comparison is
-confounded: the PReLU run started the activation slope at 0.25 (pre-`e463e1e`)
-and this one starts at 0, and neither matches the structure ablations (the
-released structure is worth ~0.03 on the same protocol).
+Final (best epoch 5): gAUC **0.8575** / AUC 0.8587 / logloss 0.4816.  The rerun
+reproduced the first run exactly through epoch 8 (0.8277 / 0.8343 / 0.8477 /
+0.8540 / 0.8575 / 0.8539 / 0.8548 / 0.8543) and **NaN'd at the same epoch 38**,
+so both the result and the divergence are deterministic properties of this
+configuration, not run-to-run noise.
+
+With the PReLU run now rerun at the same initialisation, the comparison is
+controlled for the first time:
+
+| Activation | gAUC | AUC | best epoch |
+| --- | --- | --- | --- |
+| PReLU (init 0), current code | **0.8645** | 0.8649 | 11 |
+| Dice (alpha 0), current code | 0.8575 | 0.8587 | 5 |
+| Paper Table 3 | 0.8871 | — | — |
+| Authors' README (their TF run) | 0.8711 | — | — |
+
+**Dice is 0.0070 *worse* than PReLU on this data**, while the paper reports
++0.0053 the other way and the authors' own README +0.0013.  Same data, seed,
+protocol and initialisation, so this is a property of the Dice implementation
+on this stack (BN gate at batch 32, SGD 1.0, no dropout/regulariser) rather
+than of the two runs being incomparable.  The released-structure Dice run
+below reaches 0.8658 at epoch 2 and then NaN's at epoch 3, which is the same
+instability.
 
 ## Notes
 
-* The PReLU DIN run trained before commit `e463e1e` (PReLU slope default 0.25);
-  this run starts from 0 as the paper's Eq. (9) form suggests.  The two runs are
-  therefore not a perfectly controlled PReLU-vs-Dice comparison: a matching
-  PReLU baseline would need a rerun with `init=0.0`.
+* The PReLU-vs-Dice comparison is now controlled: the PReLU arm was rerun on
+  the same code, data, seed and protocol and reaches 0.8645 (see the
+  [DIN run](din_paper_amazonelectronics_x1.md)).
+* The NaN is reproducible: two runs with different code revisions (init-0.25
+  and init-0 PReLU elsewhere in the model) both die at **epoch 38**, with the
+  train loss falling normally to 0.086 before the first non-finite batch.  The
+  best checkpoint (epoch 5) predates it, so the recorded number is unaffected.
+  The crash is consistent with `alpha`/BN statistics diverging under SGD at a
+  constant 0.1 with batch 32 and no dropout; a future fix would clamp the Dice
+  gate or train it at a lower rate, but that is no longer the paper's protocol.
 * Same data, metric and test-set model selection as the DIN run: the released
   split has no validation set.
 

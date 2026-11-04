@@ -96,7 +96,9 @@ step 4,076,200 (epoch 50) lr = 0.1
 `lr = 0.1` (an absolute value), so the rate stays at 0.1; a plain geometric
 schedule `1.0 → 0.1 → 0.01 → …` collapses to 1e-9 by epoch 39 and stops
 learning.  The first run of this protocol made exactly that mistake; its best
-gAUC was 0.8555 at epoch 7 and the remaining 30+ epochs were wasted.
+gAUC was 0.8555 at epoch 7 and the remaining 30+ epochs were wasted.  (The
+2026-10-29 rerun with the fixed schedule also peaked at 0.8555, but with the
+then-default PReLU slope 0.25 — see note 7.)
 
 ## 4. Training loop
 
@@ -140,7 +142,11 @@ multiplies the rate by 0.1 and `early_stop_patience` counts epochs.
 7. **PReLU initial slope.**  Slopes start at 0 (`nn.PReLU(width, init=0.0)`, so
    the unit begins as a plain ReLU), following the form of paper Eq. (8).  PyTorch's
    default is 0.25.  The released code has no PReLU to copy (both MLPs use
-   `sigmoid`); only its Dice `alpha` starts at 0.
+   `sigmoid`); only its Dice `alpha` starts at 0.  **This value is worth 0.009
+   gAUC over a 50-epoch run**: with 0.25 the config peaked at 0.8555, with 0.0
+   at 0.8645 (identical data, seed and schedule; the curves are identical for
+   the first three epochs and separate afterwards).  A 3-epoch control cannot
+   see the difference, which is why it was first reported as immaterial.
 8. **Single card only.**  The step schedule counts optimizer steps per process.
    Under DDP each rank reaches step 336,000 after consuming `world_size` times
    the samples of a single card, so the learning-rate drop comes later than in
