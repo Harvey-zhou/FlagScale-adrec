@@ -17,6 +17,8 @@ Protocols (why each value is what it is) live in
 | [LightGCN paper protocol](lightgcn_paper_gowalla.md) | Gowalla | finished (1,000 epochs) | recall@20 0.1820 / ndcg@20 0.1553 (paper 0.1823 / 0.1555) |
 | LightGCN paper protocol | Yelp2018 | running (batch 2048, 1,000 epochs) | ~300 s/epoch, ~85 h total |
 | [Two-Tower (TorchRec)](two_tower_synthetic_torchrec.md) | synthetic (random) | finished (100 iterations) | no accuracy target; train loss 0.4402 / held-out 0.6923 (≈ ln 2), identical to the CPU reference |
+| [DSSM (torch-rechub)](dssm_movielens_1m.md) | MovieLens-1M | finished (10 epochs) | Hit@100 **0.1921** / NDCG@100 0.0430 (torch-rechub README 0.1474; matches the 2026-10-15 vendor run to 4 decimals) |
+| [DSSM (torch-rechub)](dssm_movielens_20m.md) | MovieLens-20M | finished (10 epochs) | Hit@100 **0.1647** / NDCG@100 0.0393 (best epoch 9: 0.1665); no published reference; user tower is user_id + history because ML-20M has no demographics |
 
 The reference-code configs (`sasrec.yaml`, `lightgcn.yaml`, …) are covered by
 `EVIDENCE.md`; this directory records the paper-protocol runs.
