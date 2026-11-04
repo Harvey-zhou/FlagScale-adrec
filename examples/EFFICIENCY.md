@@ -92,16 +92,20 @@ below is the same config, seed and epoch budget as its FP32 counterpart.
 | Two-Tower (synthetic) | loss 0.6923 / train 0.4402 | identical | 0 | 984 | 1,006 |
 | DSSM / MovieLens-1M | Hit@100 0.1921 | 0.1990 | +0.0069 | 179,419 | 174,542 |
 | DSSM / MovieLens-20M | Hit@100 0.1647 | 0.1627 | −0.0020 | 183,777 | 179,481 |
-| DIN / Amazon (paper, 50 ep) | gAUC 0.8645 | running | — | 5,438 | — |
+| DIN / Amazon (paper, 50 ep) | gAUC 0.8645 / 0.4714 | 0.8625 / 0.4683 | −0.0020 | 5,438 | 5,705 |
 | DIN / Amazon (1 epoch probe) | gAUC 0.8227 | 0.8230 | +0.0003 | 3,245 | 3,243 |
 
 Reading of the table:
 
 * **BF16 does not change accuracy** where the trajectory is deterministic:
-  DeepFM is identical to five decimals and DCN-Mix moves by 0.0004.  Where the
-  number moves more (SASRec Beauty +0.0078, DSSM +0.0069) the early-stopping
-  epoch moved with it — SASRec Beauty ran to epoch 324 under BF16 against 275
-  under FP32 — so those are run-to-run differences, not precision loss.
+  DeepFM is identical to five decimals, DCN-Mix moves by 0.0004 and LightGCN is
+  bit-identical at every evaluated epoch (Gowalla e40/60/80/100 = 0.1487 /
+  0.1569 / 0.1626 / 0.1668 for both precisions; Yelp2018 the same).  Where the
+  number moves more (SASRec Beauty +0.0078, DSSM +0.0069, DIN −0.0020) the
+  early-stopping epoch moved with it — SASRec Beauty ran to epoch 324 under BF16
+  against 275 under FP32, and DIN peaks at epoch 7 instead of 11 because the
+  FP32 run has a transient dip at epoch 4 that the BF16 run does not — so those
+  are trajectory differences, not precision loss.
 * **BF16 is not uniformly faster for training.**  At batch 128 (DCN-Mix) it is
   12 % slower; at batch 4096 (DeepFM, SASRec) it is faster; LightGCN is exactly
   flat because the cost is the full-graph `index_add` propagation, not a matmul.
