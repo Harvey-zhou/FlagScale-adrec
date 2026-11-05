@@ -35,6 +35,7 @@ matmul hangs.
 | DIN / Amazon Electronics | `din_paper` (rerun, PReLU 0.0) | 32 | 50 | **5,438** | 5,412 | 6 h 45 m (idle card) |
 | DIN / Amazon Electronics | `din_paper_dice` | 32 | 50 | 2,109 | 2,158 | 17 h 13 m |
 | LightGCN / Gowalla | `lightgcn_paper` | 1024 | 1000 | 3,224 | 3,225 | 69 h 56 m |
+| LightGCN / Amazon-Book | `lightgcn_amazon_book` | 2048 | 1000 | **2,115** (running) | — | ~313 h projected |
 | DIN / Amazon Electronics | `din` (BARS, batch 1024) | 1024 | 9 | **8,493** | 8,493 | 46 min |
 | DCN-Mix / Criteo_x1 | `dcn_mix_paper` | 512 | 3 | **9,580** | 9,584 | 2 h 55 m (card shared) |
 | DCN-Mix / Criteo_x1 | `dcn_mix_paper`, lr 1e-4 | 512 | 3 | **19,488** | 19,468 | 1 h 26 m (idle card) |
@@ -70,6 +71,7 @@ built once before timing (it is the served catalogue, not per-request compute).
 | SASRec | Steam test (332,925 users × 101, max_len 50) | 332,925 | 1.239 | **268,304** | 1.521 | 216,555 |
 | LightGCN | Gowalla test (29,858 users, full ranking) | 29,858 | 0.1747 | **170,849** | 0.1701 | 175,459 |
 | LightGCN | Yelp2018 test (31,668 users, full ranking) | 31,668 | 0.247 | **128,344** | 0.250 | 126,532 |
+| LightGCN | Amazon-Book | pending first checkpoint (epoch 20) | — | — | — | — | — |
 | DCN-Mix | Criteo_x1 test (4,587,167) | 4,587,167 | 8.14 | **563,427** | 8.51 | 539,113 |
 | DCN-Mix | MovieLens-1M test (73,901) | 73,901 | 0.0365 | **2,029,283** | 0.0522 | 1,413,111 |
 | DSSM | MovieLens-1M test (6,040 users, full catalogue) | 6,040 | 0.0456 | **124,180** | 0.0107 | 490,018 |
