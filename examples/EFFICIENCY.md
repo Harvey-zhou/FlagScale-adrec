@@ -27,6 +27,9 @@ matmul hangs.
 | Run | Config | Batch | Epochs | Mean samples/s | Median | Train time |
 | --- | --- | --- | --- | --- | --- | --- |
 | SASRec / MovieLens-1M | `sasrec_paper` | 128 | 159 | **5,361** | 5,135 | 3 min 01 s |
+| SASRec / Amazon Beauty | `sasrec_beauty_paper` | 128 | 275 | **6,746** | 6,574 | 33 min 18 s |
+| SASRec / Amazon Games | `sasrec_games_paper` | 128 | 182 | **6,433** | 6,362 | 14 min 42 s |
+| SASRec / Steam | `sasrec_steam_paper` | 128 | 78 | **6,271** | 6,279 | 1 h 07 m |
 | DeepFM / Criteo_x1 | `deepfm_paper` | 4096 | 6 | **110,230** | 110,329 | 29 min 57 s |
 | DIN / Amazon Electronics | `din_paper` | 32 | 50 | **2,755** | 2,882 | 13 h 41 m |
 | DIN / Amazon Electronics | `din_paper` (rerun, PReLU 0.0) | 32 | 50 | **5,438** | 5,412 | 6 h 45 m (idle card) |
@@ -61,6 +64,9 @@ built once before timing (it is the served catalogue, not per-request compute).
 | DIN | Amazon Electronics test (384,806) | 384,806 | 1.743 | **220,762** | 2.494 | 154,345 |
 | DeepFM | Criteo_x1 test (4,587,167) | 4,587,167 | 4.568 | **1,004,304** | 3.863 | 1,187,606 |
 | SASRec | MovieLens-1M test (6,040 users × 101 candidates) | 6,040 | 0.0675 | **89,455** | 0.200 | 30,488 |
+| SASRec | Amazon Beauty test (50,498 users × 101, max_len 50) | 50,498 | 0.191 | **263,633** | 0.241 | 209,782 |
+| SASRec | Amazon Games test (30,901 users × 101, max_len 50) | 30,901 | 0.117 | **263,393** | 0.147 | 208,687 |
+| SASRec | Steam test (332,925 users × 101, max_len 50) | 332,925 | 1.239 | **268,304** | 1.521 | 216,555 |
 | LightGCN | Yelp2018 test (31,668 users, full ranking) | 31,668 | 0.247 | **128,344** | 0.250 | 126,532 |
 | DCN-Mix | MovieLens-1M test (73,901) | 73,901 | 0.0365 | **2,029,283** | 0.0522 | 1,413,111 |
 | DSSM | MovieLens-1M test (6,040 users, full catalogue) | 6,040 | 0.0456 | **124,180** | 0.0107 | 490,018 |
@@ -74,7 +80,8 @@ LightGCN and for the two-tower models.
 the pass**: DSSM gains 2.0×/1.9× (the user-tower output times the item matrix is
 one big matmul, 490,018 and 30,355 rows/s), DeepFM gains 18 % (1,187,606),
 LightGCN is flat (−1.4 %, 126,532), DCN-Mix loses 30 % (1,413,111), DIN loses
-30 % and SASRec loses 66 %.  The small per-row models fall back to
+30 % and SASRec loses 66 % on MovieLens-1M — but only ~20 % on
+Beauty/Games/Steam, whose sequences are 50 items instead of 200.  The small per-row models fall back to
 conversion-heavy paths; wide matmuls do not.  This is a property of the vendor
 kernel mix, not of the models.
 
@@ -90,7 +97,9 @@ below is the same config, seed and epoch budget as its FP32 counterpart.
 | DCN-Mix / MovieLens-1M | AUC 0.8513 / 0.3680 | 0.8509 / 0.3682 | −0.0004 | 8,200 | 7,248 |
 | DCN-Mix / Criteo_x1 (paper) | AUC 0.8104 / 0.4411 | 0.8105 / 0.4410 | +0.0001 | 9,580 | 15,912 |
 | SASRec / MovieLens-1M | HR@10 0.8204 / NDCG 0.5910 | 0.8215 / 0.5940 | +0.0011 | 5,361 | 8,807 |
-| SASRec / Amazon Beauty | HR@10 0.4604 / NDCG 0.3034 | 0.4682 / 0.3104 | +0.0078 | ~6,300 | 11,456 |
+| SASRec / Amazon Beauty | HR@10 0.4604 / NDCG 0.3034 | 0.4682 / 0.3104 | +0.0078 | 6,746 | 11,456 |
+| SASRec / Amazon Games | HR@10 0.7340 / NDCG@10 0.5281 | 0.7324 / 0.5266 | −0.0016 | 6,433 | 12,635 |
+| SASRec / Steam | HR@10 0.8589 / NDCG@10 0.6150 | 0.8593 / 0.6152 | +0.0004 | 6,271 | 13,525 |
 | LightGCN / Gowalla (1,000 ep) | recall@20 0.1820 / ndcg 0.1553 | running (epoch 20 identical: 0.1339 / 0.1160) | — | 3,224 | 3,225 |
 | LightGCN / Yelp2018 (1,000 ep) | running | running | — | 4,216 | 4,214 |
 | Two-Tower (synthetic) | loss 0.6923 / train 0.4402 | identical | 0 | 984 | 1,006 |

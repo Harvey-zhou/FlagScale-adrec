@@ -80,6 +80,25 @@ item is not systematically much rarer than the second-to-last.
 * Throughput is 6,279 samples/s median; the 1 h 18 m wall clock is dominated by
   the 2,519 steps per epoch, not by model size.
 
+## BF16 counterpart
+
+The same config, seed and epoch budget under `train.model.torch_dtype=bf16`
+(autocast with fp32 master weights), run on the P800:
+
+| | FP32 | BF16 | Δ |
+| --- | --- | --- | --- |
+| HR@10 | 0.8589 | **0.8593** | +0.0004 |
+| NDCG@10 | 0.6150 | **0.6152** | +0.0002 |
+| epochs run (best) | 78 | 78 (58) | — |
+| training throughput | 6,271 samples/s | 13,525 samples/s | +116% |
+| inference (rows/s, batch 1024) | 268,304 | 216,555 | — |
+
+The metric difference is inside run-to-run variation; on Beauty the BF16 run
+simply early-stopped later (78 epochs against 78), which is what
+moves the number, not bf16 arithmetic.  Inference is ~20 % slower in bf16 here,
+much less than MovieLens-1M's 66 %, because these sequences are 50 items long
+instead of 200.
+
 ## Artifacts
 
 | File | Contents |

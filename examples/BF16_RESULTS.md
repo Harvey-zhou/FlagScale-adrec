@@ -36,6 +36,8 @@ named in the config column — the only change is the dtype.
 | `bf16-dcnmix-ml1m` | `dcn_mix_ml1m_paper` (MovieLens-1M) | 32 (7) | AUC 0.850858 / logloss 0.368152 | 7,248 |
 | `bf16-sasrec-paper` | `sasrec_paper` (MovieLens-1M) | 159 (139) | HR@10 0.821523 / NDCG@10 0.594037 | 8,807 |
 | `bf16-sasrec-beauty` | `sasrec_beauty_paper` (Amazon Beauty) | 324 (304) | HR@10 0.468177 / NDCG@10 0.310388 | 11,456 |
+| `bf16-sasrec-games` | `sasrec_games_paper` (Amazon Games) | 182 (162) | HR@10 0.7324 / NDCG@10 0.5266 | 12,635 |
+| `bf16-sasrec-steam` | `sasrec_steam_paper` (Steam) | 78 (58) | HR@10 0.8593 / NDCG@10 0.6152 | 13,525 |
 | `bf16-din-paper` | `din_paper` (Amazon Electronics) | 50 (7) | gAUC 0.862489 / logloss 0.4683 | 5,705 |
 | `bf16-din-ml20m` | `din_ml20m` (MovieLens-20M) | 9 (8) | gAUC 0.984039 / logloss 0.1445 | 7,843 |
 | `bf16-dssm` | `dssm` (MovieLens-1M) | 10 | Hit@100 0.199007 / NDCG@100 0.046237 | 174,542 |
@@ -64,6 +66,10 @@ The FP32 counterpart of each row, the deltas and the inference numbers are in
 * **Speed is kernel-dependent, not uniformly better.**  Batch 128 is 12 %
   slower, batch 512/4096 and the wide Criteo matmuls are faster, and LightGCN is
   exactly flat because the cost is the full-graph `index_add` propagation.
+  SASRec's BF16 training gain depends on the dataset's sequence length: 1.6× on
+  Beauty (max_len 50), 2.0× on Games (50) and 2.2× on Steam (50), against 1.6×
+  on MovieLens-1M (max_len 200).  Its *inference* is ~20 % slower on the
+  50-item datasets but 66 % slower on the 200-item one.
 
 ## Reproduce
 

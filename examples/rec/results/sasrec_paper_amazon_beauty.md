@@ -94,6 +94,25 @@ implementation details listed in the protocol document.
   at batch 128 (381 steps per epoch) — the model is tiny (2.9 M parameters) and
   the loop is dominated by per-step overhead, as with the other rec runs.
 
+## BF16 counterpart
+
+The same config, seed and epoch budget under `train.model.torch_dtype=bf16`
+(autocast with fp32 master weights), run on the P800:
+
+| | FP32 | BF16 | Δ |
+| --- | --- | --- | --- |
+| HR@10 | 0.4604 | **0.4682** | +0.0078 |
+| NDCG@10 | 0.3034 | **0.3104** | +0.0070 |
+| epochs run (best) | 275 | 324 (304) | — |
+| training throughput | 6,746 samples/s | 11,456 samples/s | +70% |
+| inference (rows/s, batch 1024) | 263,633 | 209,782 | — |
+
+The metric difference is inside run-to-run variation; on Beauty the BF16 run
+simply early-stopped later (324 epochs against 275), which is what
+moves the number, not bf16 arithmetic.  Inference is ~20 % slower in bf16 here,
+much less than MovieLens-1M's 66 %, because these sequences are 50 items long
+instead of 200.
+
 ## Artifacts
 
 | File | Contents |
