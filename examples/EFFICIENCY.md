@@ -95,7 +95,7 @@ below is the same config, seed and epoch budget as its FP32 counterpart.
 | DSSM / MovieLens-20M | Hit@100 0.1647 | 0.1627 | −0.0020 | 183,777 | 179,481 |
 | DIN / Amazon (paper, 50 ep) | gAUC 0.8645 / 0.4714 | 0.8625 / 0.4683 | −0.0020 | 5,438 | 5,705 |
 | DIN / Amazon (1 epoch probe) | gAUC 0.8227 | 0.8230 | +0.0003 | 3,245 | 3,243 |
-| DIN / MovieLens-20M | gAUC 0.9839 | running | — | 8,056 | 7,841 |
+| DIN / MovieLens-20M | gAUC 0.9839 / 0.1436 | 0.9840 / 0.1445 | +0.0001 | 8,056 | 7,843 |
 
 Reading of the table:
 

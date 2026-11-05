@@ -2,9 +2,9 @@
 
 | Field | Value |
 | --- | --- |
-| Status | **finished** (9 epochs, best epoch 9); BF16 counterpart running |
-| Started / finished | 2026-11-04 14:21 → 2026-11-05 02:40 (CST) |
-| Wall clock | 12 h 19 m |
+| Status | **finished** (9 epochs, best epoch 9) + the BF16 counterpart |
+| Started / finished | FP32 2026-11-04 14:21 → 11-05 02:40; BF16 11-04 20:00 → 11-05 08:39 (CST) |
+| Wall clock | 12 h 19 m (FP32), 12 h 39 m (BF16) |
 | Config | `examples/ads/conf/train/din_ml20m.yaml` |
 | Dataset | `examples/ads/prepare_movielens20m_din.py` → `/data2/jiangxuhui/datasets/movielens_20m_din` |
 | Code commit | `dc5cb07` |
@@ -53,11 +53,19 @@ raise the number further.
 
 ## Results
 
-| Metric | FP32 (best epoch 9) | BF16 | Paper |
-| --- | --- | --- | --- |
-| gAUC | **0.9839** | running | none — no MovieLens experiment in the paper |
-| AUC | 0.9869 | running | — |
-| logloss | 0.1436 | running | — |
+| Metric | FP32 (best epoch 9) | BF16 (best epoch 8) | Δ | Paper |
+| --- | --- | --- | --- | --- |
+| gAUC | 0.9839 | **0.9840** | +0.0001 | none — no MovieLens experiment in the paper |
+| AUC | 0.9869 | **0.9870** | +0.0001 | — |
+| logloss | 0.1436 | 0.1445 | +0.0009 | — |
+| throughput | 8,056 samples/s | 7,843 samples/s | −2.6 % | — |
+
+The two precisions are indistinguishable: the largest difference is 0.0009
+logloss, and the curves overlap epoch by epoch (BF16 0.9729 / 0.9727 / 0.9808 /
+0.9815 / 0.9815 / 0.9837 / 0.9838 / **0.9840** / 0.9839 against FP32's
+0.9725 / 0.9731 / 0.9739 / 0.9735 / 0.9812 / 0.9819 / 0.9819 / 0.9839 /
+**0.9839**).  BF16 is 2.6 % slower at batch 1024, consistent with the other
+small-batch rows.
 
 gAUC 0.98 is high because the task is "the true next movie against one random
 movie out of 26.7 k": a well-trained model separates those easily.  The number
