@@ -11,6 +11,9 @@ project:
   D2H)`, with top-k, sorting and metric computation excluded.  Measured with
   [`tools/bench_inference.py`](../tools/bench_inference.py).
 
+The notes that used to sit in the shared table's 备注 column are kept in
+[TABLE_NOTES.md](TABLE_NOTES.md).
+
 Environment: Kunlunxin P800 OAM (96 GiB), vendor torch 2.9.0+cu128, fp32,
 single card per run, `use_flaggems=false`.  The host is shared, so absolute
 numbers move with co-running jobs; the run-to-run spread is shown where it
