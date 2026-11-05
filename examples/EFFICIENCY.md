@@ -62,12 +62,15 @@ built once before timing (it is the served catalogue, not per-request compute).
 | Model | Dataset | Rows per pass | FP32 s/pass | FP32 rows/s | BF16 s/pass | BF16 rows/s |
 | --- | --- | --- | --- | --- | --- | --- |
 | DIN | Amazon Electronics test (384,806) | 384,806 | 1.743 | **220,762** | 2.494 | 154,345 |
+| DIN | MovieLens-20M test (276,986, max_len 100) | 276,986 | 19.58 | **14,145** | 20.14 | 13,750 |
 | DeepFM | Criteo_x1 test (4,587,167) | 4,587,167 | 4.568 | **1,004,304** | 3.863 | 1,187,606 |
 | SASRec | MovieLens-1M test (6,040 users × 101 candidates) | 6,040 | 0.0675 | **89,455** | 0.200 | 30,488 |
 | SASRec | Amazon Beauty test (50,498 users × 101, max_len 50) | 50,498 | 0.191 | **263,633** | 0.241 | 209,782 |
 | SASRec | Amazon Games test (30,901 users × 101, max_len 50) | 30,901 | 0.117 | **263,393** | 0.147 | 208,687 |
 | SASRec | Steam test (332,925 users × 101, max_len 50) | 332,925 | 1.239 | **268,304** | 1.521 | 216,555 |
+| LightGCN | Gowalla test (29,858 users, full ranking) | 29,858 | 0.1747 | **170,849** | 0.1701 | 175,459 |
 | LightGCN | Yelp2018 test (31,668 users, full ranking) | 31,668 | 0.247 | **128,344** | 0.250 | 126,532 |
+| DCN-Mix | Criteo_x1 test (4,587,167) | 4,587,167 | 8.14 | **563,427** | 8.51 | 539,113 |
 | DCN-Mix | MovieLens-1M test (73,901) | 73,901 | 0.0365 | **2,029,283** | 0.0522 | 1,413,111 |
 | DSSM | MovieLens-1M test (6,040 users, full catalogue) | 6,040 | 0.0456 | **124,180** | 0.0107 | 490,018 |
 | DSSM | MovieLens-20M test (138,493 users, full catalogue) | 138,493 | 8.62 | **16,063** | 4.56 | 30,355 |
@@ -79,9 +82,12 @@ LightGCN and for the two-tower models.
 **BF16 works, and whether it helps depends on the model and on what dominates
 the pass**: DSSM gains 2.0×/1.9× (the user-tower output times the item matrix is
 one big matmul, 490,018 and 30,355 rows/s), DeepFM gains 18 % (1,187,606),
-LightGCN is flat (−1.4 %, 126,532), DCN-Mix loses 30 % (1,413,111), DIN loses
-30 % and SASRec loses 66 % on MovieLens-1M — but only ~20 % on
-Beauty/Games/Steam, whose sequences are 50 items instead of 200.  The small per-row models fall back to
+LightGCN is flat (−1.4 % on Yelp, +2.7 % on Gowalla), DCN-Mix loses 30 % on
+MovieLens-1M but only 4 % on Criteo (1.14 M-parameter cross/DNN behind a
+2 M-row embedding table, so the table lookup dominates), DIN loses 30 % on
+Amazon but 3 % on MovieLens-20M (max_len 100, 8192-row batches), and SASRec
+loses 66 % on MovieLens-1M — but only ~20 % on Beauty/Games/Steam, whose
+sequences are 50 items instead of 200.  The small per-row models fall back to
 conversion-heavy paths; wide matmuls do not.  This is a property of the vendor
 kernel mix, not of the models.
 
