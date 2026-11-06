@@ -8,10 +8,11 @@ The ads and rec models run on Cambricon cards through the vendor stack:
 its Cambricon backend is a separate track.  Model, loss, data and metric code
 are the ones used on CUDA.
 
-Status: adapter, launcher and container wrapper written.  First runs done on
-2026-11-03 / 11-06: preflight, the `ads` `din` / `deepfm` / `dcn_mix` smokes,
-and single-card `rec` training of `sasrec` / `dssm` / `two_tower`.  The SASRec
-Beauty/Games/Steam data and the multi-card runs are still TODO.
+Status: adapter, launcher and container wrapper written.  Done on 2026-11-03 /
+11-06: preflight, the `ads` smokes, single-card `rec` training (`sasrec`,
+`dssm`, `two_tower`), the four paper-protocol SASRec runs (ML-1M, Beauty,
+Games, Steam), and 2-card CNCL DDP on ML-1M.  LightGCN full runs and
+multi-node are still TODO.
 
 ## Cluster environment
 
@@ -35,7 +36,7 @@ host, driver and image rows were verified on 2026-11-03 with `cnmon`,
 | Page-locked host memory | yes, so it is on by default for `mlu` (`FLAGSCALE_PIN_MEMORY=false` turns it off) | preflight.log |
 | CNCL available | yes (`torch.distributed.is_cncl_available()`) | preflight.log |
 | `ADREC_VENV` (or env activation script) | not needed: `/torch/venv3/pytorch` inside the 26.08 container is activated by the login shell and is also a launcher default | preflight.log |
-| Data root (`ADREC_DATA_ROOT`), md5 checked against EVIDENCE.md | `/srv/jiangxuhui/datasets`; `AmazonElectronics_x1` raw md5 `e9bf80b9…` / `57a20e82…` and `Criteo_x1` `30b89c1c…` / `f73c71fb…` / `2c48b26e…` match EVIDENCE.md; encoded with the `prepare_*.py` scripts | md5sum, prepare output |
+| Data root (`ADREC_DATA_ROOT`), md5 checked against EVIDENCE.md | `/srv/jiangxuhui/datasets`; `AmazonElectronics_x1` raw md5 `e9bf80b9…` / `57a20e82…` and `Criteo_x1` `30b89c1c…` / `f73c71fb…` / `2c48b26e…` match EVIDENCE.md; `SASRec` Beauty/Games/Steam `.txt` come from the authors' repo (via `api.github.com`) and their row/count statistics match `PAPER_PROTOCOLS.md`; encoded with the `prepare_*.py` scripts | md5sum, prepare output |
 
 ## Host inventory
 
@@ -54,7 +55,7 @@ this file lives in a public repository.
 | Driver / firmware | 6.5.52 (runfile install, DKMS-built), firmware v1.5.0, `mlumsgd` running |
 | Storage | `/` 437 GB (109 GB free), `/srv` 11 TB (5.9 TB free) |
 | Network | 11 mlx5 HCAs, RoCE interfaces up |
-| Internet / mirrors | `huggingface.co` times out; `hf-mirror.com` works (`HF_ENDPOINT=https://hf-mirror.com`) |
+| Internet / mirrors | `huggingface.co` times out; `hf-mirror.com` works (`HF_ENDPOINT=https://hf-mirror.com`); GitHub `raw.githubusercontent.com` is blocked but `api.github.com` works (contents API with `Accept: application/vnd.github.raw` supports Range) |
 | Docker | installed; the login user is in the `docker` group (takes effect on a new login; `sg docker -c …` works in a running shell), set `DOCKER=docker` to skip sudo |
 | Vendor bundle | shared storage: drivers 6.2.29 and 6.5.52, `.deb` packages, cp312/pt2.12.1 wheels, five container tars, SDK docs |
 | Open items | clock cap above; stale `cambricon-mlu-driver-dkms 6.2.29` dpkg/dkms record; no MagicMind (inference only, not needed for training) |
@@ -122,6 +123,11 @@ written in the container are root-owned.
 | Config | Cards | Test metric | P800 same config | Reference | Train samples/s | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | rec `sasrec` (ML-1M, code defaults) | 1 | HR@10 0.8180 / NDCG@10 0.5892 | — (P800 ran `sasrec_paper`: 0.8204 / 0.5910) | 0.8190–0.8225 / 0.5897–0.5918 (pmixer code) | 8,592 | 200 epochs, 141 s total |
+| rec `sasrec_paper` (ML-1M) | 1 | HR@10 0.8174 / NDCG@10 0.5895 | 0.8204 / 0.5910 (197 s) | 0.8245 / 0.5905 (paper) | 8,337 | early stop @163; 127 s |
+| rec `sasrec` (ML-1M, 2-card DDP) | 2 | HR@10 0.8190 / NDCG@10 0.5925 | — | 0.8190–0.8225 / 0.5897–0.5918 (pmixer code) | 9,805 | CNCL over MLU-Link; 1.14× the 1-card throughput; 123 s |
+| rec `sasrec_beauty_paper` | 1 | HR@10 0.4684 / NDCG@10 0.3092 | 0.4604 / 0.3034 (2,079 s) | 0.4854 / 0.3219 (paper) | 10,838 | early stop @381; 2,058 s |
+| rec `sasrec_games_paper` | 1 | HR@10 0.7266 / NDCG@10 0.5222 | 0.7340 / 0.5281 (914 s) | 0.7410 / 0.5360 (paper) | 9,305 | early stop @133; 409 s |
+| rec `sasrec_steam_paper` | 1 | HR@10 0.8614 / NDCG@10 0.6167 | 0.8589 / 0.6150 (4,702 s) | 0.8729 / 0.6306 (paper) | 10,672 | early stop @108; 3,416 s |
 | rec `dssm` (ML-1M) | 1 | Recall@100 0.2123 | — | 0.1474 (torch-rechub README) | 312,074 | exact full-catalogue ranking; the reference uses Annoy, so not strictly like-for-like |
 | rec `two_tower` (synthetic) | 1 | neg_loss −0.6923 | — | none published | 7,045 | 100 steps; pipeline check only |
 
