@@ -8,9 +8,10 @@ The ads and rec models run on Cambricon cards through the vendor stack:
 its Cambricon backend is a separate track.  Model, loss, data and metric code
 are the ones used on CUDA.
 
-Status: adapter, launcher and container wrapper written.  First card runs done
-on 2026-11-03: preflight plus the `ads` `din` / `deepfm` / `dcn_mix` smokes on
-one MLU590-M9.  The `rec` configs and the multi-card runs are still TODO.
+Status: adapter, launcher and container wrapper written.  First runs done on
+2026-11-03 / 11-06: preflight, the `ads` `din` / `deepfm` / `dcn_mix` smokes,
+and single-card `rec` training of `sasrec` / `dssm` / `two_tower`.  The SASRec
+Beauty/Games/Steam data and the multi-card runs are still TODO.
 
 ## Cluster environment
 
@@ -111,15 +112,18 @@ written in the container are root-owned.
 | ads `din` | yes (exit 0, fallback off) | none | none | CNNL warns `cnnlMasked_v4` is deprecated; 3-step eval AUC 0.5667 (not a result) |
 | ads `deepfm` | yes (exit 0, fallback off) | none | none | Criteo_x1 33.0M/8.25M/4.59M; 23.4M parameters |
 | ads `dcn_mix` | yes (exit 0, fallback off) | none | none | Criteo_x1; 21.9M parameters |
-| rec `sasrec` | TODO | | | |
-| rec `dssm` | TODO | | | the two-tower model of the six (torch-rechub, MovieLens-1M); `two_tower` is TorchRec's synthetic-data example and optional |
-| rec `lightgcn` | TODO | | | `sparse` vs `index_add` |
+| rec `sasrec` | yes (exit 0, fallback off) | none | none | ML-1M; 211,950 parameters |
+| rec `dssm` | yes (exit 0, fallback off) | none | none | MovieLens-1M; 329,222 parameters; the two-tower model of the six (torch-rechub); `two_tower` is TorchRec's synthetic-data example and optional |
+| rec `two_tower` | yes (exit 0, fallback off) | none | none | synthetic batches, 134.3M parameters |
+| rec `lightgcn` | yes (exit 0, fallback off) | none | none | `sparse` Coo runs on MLU; `index_add` was not needed |
 
 ## Training results
 
 | Config | Cards | Test metric | P800 same config | Reference | Train samples/s | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| TODO | | | | | | |
+| rec `sasrec` (ML-1M, code defaults) | 1 | HR@10 0.8180 / NDCG@10 0.5892 | — (P800 ran `sasrec_paper`: 0.8204 / 0.5910) | 0.8190–0.8225 / 0.5897–0.5918 (pmixer code) | 8,592 | 200 epochs, 141 s total |
+| rec `dssm` (ML-1M) | 1 | Recall@100 0.2123 | — | 0.1474 (torch-rechub README) | 312,074 | exact full-catalogue ranking; the reference uses Annoy, so not strictly like-for-like |
+| rec `two_tower` (synthetic) | 1 | neg_loss −0.6923 | — | none published | 7,045 | 100 steps; pipeline check only |
 
 "P800 same config" is the Kunlunxin P800 run recorded in `ads/results/` or
 `rec/results/` (fp32, vendor torch 2.9.0).  It is a like-for-like comparison
