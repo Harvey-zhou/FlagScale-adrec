@@ -108,12 +108,12 @@ below is the same config, seed and epoch budget as its FP32 counterpart.
 | SASRec / Amazon Beauty | HR@10 0.4604 / NDCG 0.3034 | 0.4682 / 0.3104 | +0.0078 | 6,746 | 11,456 |
 | SASRec / Amazon Games | HR@10 0.7340 / NDCG@10 0.5281 | 0.7324 / 0.5266 | −0.0016 | 6,433 | 12,635 |
 | SASRec / Steam | HR@10 0.8589 / NDCG@10 0.6150 | 0.8593 / 0.6152 | +0.0004 | 6,271 | 13,525 |
-| LightGCN / Gowalla (1,000 ep) | recall@20 0.1820 / ndcg 0.1553 | running (epoch 20 identical: 0.1339 / 0.1160) | — | 3,224 | 3,225 |
+| LightGCN / Gowalla (1,000 ep) | recall@20 0.1820 / ndcg 0.1553 | running: e580 0.1807 / 0.1541 (every aligned eval point identical to FP32) | — | 3,224 | 3,225 |
 | LightGCN / Yelp2018 (1,000 ep) | running | running | — | 4,216 | 4,214 |
 | Two-Tower (synthetic) | loss 0.6923 / train 0.4402 | identical | 0 | 984 | 1,006 |
 | DSSM / MovieLens-1M | Hit@100 0.1921 | 0.1990 | +0.0069 | 179,419 | 174,542 |
 | DSSM / MovieLens-20M | Hit@100 0.1647 | 0.1627 | −0.0020 | 183,777 | 179,481 |
-| DIN / Amazon (paper, 50 ep) | gAUC 0.8645 / 0.4714 | 0.8625 / 0.4683 | −0.0020 | 5,438 | 5,705 |
+| DIN / Amazon (paper, 50 ep) | gAUC 0.8645 / AUC 0.8649 / 0.4714 | 0.8625 / 0.8633 / 0.4683 | −0.0020 | 5,438 | 5,705 |
 | DIN / Amazon (1 epoch probe) | gAUC 0.8227 | 0.8230 | +0.0003 | 3,245 | 3,243 |
 | DIN / MovieLens-20M | gAUC 0.9839 / 0.1436 | 0.9840 / 0.1445 | +0.0001 | 8,056 | 7,843 |
 

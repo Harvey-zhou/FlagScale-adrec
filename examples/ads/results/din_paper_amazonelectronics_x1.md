@@ -253,6 +253,27 @@ is established is the cluster-level result: the released structure reproduces
 the authors' 0.8698, while the paper-text structure stays at 0.8400 after three
 epochs and 0.8555 at its 50-epoch best.
 
+## BF16 counterpart
+
+The same config, seed and 50-epoch budget under `train.model.torch_dtype=bf16`
+(autocast with fp32 master weights), run on card 6:
+
+| Metric | FP32 (best epoch 11) | BF16 (best epoch 7) | Δ |
+| --- | --- | --- | --- |
+| gAUC | 0.8645 | **0.8625** | −0.0020 |
+| AUC | 0.8649 | **0.8633** | −0.0016 |
+| logloss | 0.4714 | **0.4683** | −0.0031 |
+| training throughput | 5,438 samples/s | 5,705 samples/s | +4.9 % |
+| inference (batch 8192) | 220,762 rows/s | 154,345 rows/s | −30 % |
+
+The curves agree epoch by epoch for the first three epochs (BF16 0.8230 / 0.8265
+/ 0.8450 against FP32 0.8227 / 0.8334 / 0.8400) and then separate: the FP32 run
+has a transient collapse at epoch 4 (0.7830) that the BF16 run does not, so the
+BF16 best epoch moves from 11 to 7.  The 0.002 AUC difference is therefore a
+trajectory difference, not bf16 arithmetic; the paired bf16 arm is actually
+0.003 lower on logloss.
+
+
 ## Artifacts
 
 | File | Contents |
