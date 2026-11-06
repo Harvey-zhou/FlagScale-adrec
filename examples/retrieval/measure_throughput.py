@@ -30,7 +30,7 @@ def sync():
             return
         except Exception:
             pass
-    for mod in ("cuda", "flagos", "npu", "musa"):
+    for mod in ("cuda", "flagos", "npu", "mlu", "musa"):
         m = getattr(torch, mod, None)
         if m is not None and hasattr(m, "synchronize"):
             try:

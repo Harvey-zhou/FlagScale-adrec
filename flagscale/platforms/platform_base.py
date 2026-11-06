@@ -75,6 +75,18 @@ class PlatformBase(ABC):
         """Whether data loaders may request page-locked host memory."""
         return False
 
+    # ---- Memory ----
+
+    def empty_cache(self) -> None:
+        """Return cached device memory to the driver.  No-op unless a platform needs it."""
+
+    def memory_stats(self):
+        """Return ``{"allocated": bytes, "reserved": bytes}`` for the current device.
+
+        ``None`` (the default) means the platform does not report it.
+        """
+        return None
+
     # ---- Compatibility ----
 
     def supports_distributions_on_device(self) -> bool:

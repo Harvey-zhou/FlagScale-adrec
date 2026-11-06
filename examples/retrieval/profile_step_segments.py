@@ -36,7 +36,7 @@ def sync():
             return
         except Exception:
             pass
-    for mod in ("cuda", "flagos", "npu", "musa"):
+    for mod in ("cuda", "flagos", "npu", "mlu", "musa"):
         m = getattr(torch, mod, None)
         if m is not None and hasattr(m, "synchronize"):
             try:
@@ -56,7 +56,7 @@ def main():
     ap.add_argument("--prof-steps", type=int, default=3,
                     help="steps to profile for op attribution (averaged)")
     ap.add_argument("--out", default=None)
-    ap.add_argument("--device", default="auto", help="auto | cuda | flagos | npu")
+    ap.add_argument("--device", default="auto", help="auto | cuda | flagos | npu | mlu")
     a = ap.parse_args()
 
     from flagscale.train.datasets.retrieval import build_split_loaders
@@ -95,7 +95,10 @@ def main():
         # acc_events keeps every start/stop cycle in the result.  Without it the
         # profiler clears events at each cycle and key_averages() reports only the
         # last profiled step, which silently divides the total by prof_steps.
-        prof = profile(activities=[ProfilerActivity.CUDA, ProfilerActivity.CPU],
+        # torch_mlu reports device time through PrivateUse1, not CUDA.
+        device_activity = (ProfilerActivity.PrivateUse1 if dev.type == "mlu"
+                           else ProfilerActivity.CUDA)
+        prof = profile(activities=[device_activity, ProfilerActivity.CPU],
                        acc_events=True)
 
     total_wall = []

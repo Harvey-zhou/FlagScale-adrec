@@ -1139,16 +1139,20 @@ def train(config: DictConfig) -> None:
             reduce_dtype=compute_dtype,
             log=log,
         )
-        # Only the local shard is copied to the NPU; the full CPU copy can now
-        # be released by the allocator.
+        # Only the local shard is copied to the accelerator; the full CPU copy
+        # can now be released by the allocator.  Platforms that need an explicit
+        # release (npu, mlu) implement empty_cache / memory_stats; the rest keep
+        # the no-op defaults, so no vendor device name appears here.
         model.to(device=device, dtype=master_dtype)
-        if device.type == "npu":
-            torch.npu.empty_cache()
-            log(
-                "NPU memory after FSDP2 move: "
-                f"allocated={torch.npu.memory_allocated() / 2**30:.1f} GiB, "
-                f"reserved={torch.npu.memory_reserved() / 2**30:.1f} GiB"
-            )
+        if platform is not None:
+            platform.empty_cache()
+            stats = platform.memory_stats()
+            if stats:
+                log(
+                    f"{platform.name().upper()} memory after FSDP2 move: "
+                    f"allocated={stats['allocated'] / 2**30:.1f} GiB, "
+                    f"reserved={stats['reserved'] / 2**30:.1f} GiB"
+                )
         log(f"moved FSDP2 shards to {device} in master dtype {master_dtype_name}")
     elif world_size > 1:
         # NCCL- and HCCL-backed replicas register their params on the process's

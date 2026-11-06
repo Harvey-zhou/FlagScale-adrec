@@ -52,3 +52,16 @@ class PlatformNPU(PlatformBase):
 
     def amp_device_type(self) -> str:
         return "npu"
+
+    def empty_cache(self) -> None:
+        import torch_npu  # noqa: F401
+
+        torch.npu.empty_cache()
+
+    def memory_stats(self):
+        import torch_npu  # noqa: F401
+
+        return {
+            "allocated": torch.npu.memory_allocated(),
+            "reserved": torch.npu.memory_reserved(),
+        }

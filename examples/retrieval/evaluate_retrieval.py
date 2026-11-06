@@ -456,9 +456,26 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    device = torch.device(args.device)
-    if args.device.startswith("flagos"):
-        torch.flagos.set_device(0)
+    requested, _, index_text = args.device.partition(":")
+    device_index = int(index_text) if index_text else 0
+    if requested in {"cpu", "cuda", "flagos"}:
+        device = torch.device(args.device)
+        if requested == "flagos":
+            torch.flagos.set_device(0)
+    else:
+        # A native vendor platform (npu, mlu, ...): the platform adapter imports
+        # the vendor runtime, which registers the device name, before any
+        # torch.device(...) is built.  A missing runtime raises instead of
+        # falling back to the CPU.
+        from flagscale.platforms.platform_register import PLATFORMS
+
+        if requested not in PLATFORMS:
+            raise RuntimeError(
+                f"--device {args.device!r} is not available; registered platforms: {sorted(PLATFORMS)}"
+            )
+        platform = PLATFORMS[requested]
+        platform.set_device(device_index)
+        device = platform.device(device_index)
 
     model_path = args.checkpoint or args.model_path
     # Take the model settings from the training config when one is given. A

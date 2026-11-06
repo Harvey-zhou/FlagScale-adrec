@@ -4,7 +4,18 @@ from __future__ import annotations
 
 import argparse
 
-import torch_fl  # noqa: F401  # must precede torch
+import os
+import sys
+
+# Torch-FL must claim the PrivateUse1 slot before torch builds a flagos tensor,
+# and torch_mlu claims the same slot, so only the requested one is imported.
+_DEVICE = next((a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--device=")), None)
+if _DEVICE is None and "--device" in sys.argv:
+    _i = sys.argv.index("--device")
+    _DEVICE = sys.argv[_i + 1] if _i + 1 < len(sys.argv) else None
+_DEVICE = (_DEVICE or os.environ.get("FLAGSCALE_DEVICE", "flagos")).strip().lower()
+if _DEVICE.startswith("flagos"):
+    import torch_fl  # noqa: F401  # must precede torch
 import torch
 from omegaconf import OmegaConf
 
@@ -54,9 +65,19 @@ _MODELS = {
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("model", choices=sorted(_MODELS))
+    parser.add_argument("--device", default=_DEVICE, help="flagos | mlu | npu | cuda (default flagos)")
     args = parser.parse_args()
     spec = _MODELS[args.model]
-    device = torch.device("flagos:0")
+    requested = args.device.partition(":")[0]
+    if requested in {"cuda", "flagos"}:
+        device = torch.device(f"{requested}:0")
+    else:
+        from flagscale.platforms.platform_register import PLATFORMS
+
+        if requested not in PLATFORMS:
+            raise RuntimeError(f"--device {args.device!r} unavailable; registered: {sorted(PLATFORMS)}")
+        PLATFORMS[requested].set_device(0)
+        device = PLATFORMS[requested].device(0)
     model_cfg = OmegaConf.create(
         {
             "model_type": args.model,

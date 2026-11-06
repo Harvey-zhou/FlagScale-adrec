@@ -36,7 +36,8 @@ experiment:
     CUDA_DEVICE_MAX_CONNECTIONS: "1"
     # W&B reads the API credential from its standard netrc login; no secret is
     # stored in this repository or in the generated Hydra config.
-    WANDB_MODE: online
+    # Set WANDB_MODE=offline on a host without internet access.
+    WANDB_MODE: ${oc.env:WANDB_MODE,online}
   cmds:
     # This is overridden to the Torch-FL environment by the CUDA launch script.
     before_start: >-

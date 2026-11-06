@@ -27,6 +27,12 @@ def register_platforms() -> None:
     if platform_npu.is_available():
         PLATFORMS["npu"] = platform_npu
 
+    from .platform_mlu import PlatformMLU
+
+    platform_mlu = PlatformMLU()
+    if platform_mlu.is_available():
+        PLATFORMS["mlu"] = platform_mlu
+
     from .platform_musa import PlatformMUSA
 
     platform_musa = PlatformMUSA()
