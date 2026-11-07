@@ -2,7 +2,7 @@
 
 | Field | Value |
 | --- | --- |
-| Status | **finished** (1,000 epochs) |
+| Status | **finished** (1,000 epochs) + the BF16 counterpart |
 | Started / finished | 2026-10-29 15:06:41 → 2026-11-01 13:02 (CST) |
 | Wall clock | 69 h 56 m (training 69 h 56 m summed over epochs) |
 | Config | `examples/rec/conf/train/lightgcn_paper.yaml` |
@@ -109,27 +109,31 @@ above the paper.  This is a reproduction within run-to-run variation.
 Training took 69 h 56 m at a mean of 3,224 samples/s (252 s/epoch, 792
 steps/epoch, batch 1024).
 
-## BF16 counterpart (running)
+## BF16 counterpart
 
 The same config (batch 1024, Xavier, λ = 1e-4, 1,000 epochs) under
-`train.model.torch_dtype=bf16`, on card 3.  Mixed precision here means autocast
+`train.model.torch_dtype=bf16`, on card 3: 2026-11-04 16:28 → 11-07 14:24
+(69 h 56 m, 251.3 s/epoch, 3,224 samples/s).  Mixed precision here means autocast
 around the forward pass with fp32 master weights; LightGCN's cost is the
 full-graph `index_add` propagation, which autocast does not touch.
 
 | | FP32 | BF16 |
 | --- | --- | --- |
-| training throughput | 3,224 samples/s (252.7 s/epoch) | 3,225 samples/s (251 s/epoch) |
+| training throughput | 3,224 samples/s (252.7 s/epoch) | 3,224 samples/s (251.3 s/epoch; median 3,225) |
 | recall@20 @ e500 | 0.1802 | 0.1802 |
 | ndcg@20 @ e500 | 0.1541 | 0.1541 |
-| final (e1000) | 0.1820 / 0.1553 | pending (~29 h at the time of writing) |
+| **final (e1000)** | **0.1820 / 0.1553** | **0.1820 / 0.1553** |
 
 Every aligned evaluation point is identical to the FP32 run: e20 0.1339/0.1160,
 e40 0.1487/0.1282, e60 0.1569/0.1345, e80 0.1626/0.1397, e100 0.1668/0.1431,
 e220 0.1748/0.1495, e240 0.1755/0.1504, e300 0.1765/0.1516, e400 0.1794/0.1531,
-e500 0.1802/0.1541.  (The BF16 run has since passed e580 at 0.1807/0.1541, an
-epoch the FP32 record does not sample.)  The 1,000-epoch number is therefore
-expected to land on 0.1820/0.1553 as well.  The final row and the artifact path will be added
-when the run finishes.
+e500 0.1802/0.1541, and finally **e1000 0.1820/0.1553**.  The two precisions
+produce the same number to four decimals at every evaluated epoch, including the
+final one: BF16 changes neither the result nor the speed of this model, because
+the propagation kernel dominates and it is not a matmul.
+
+Artifacts of the BF16 arm:
+`/data2/jiangxuhui/logs/adrec-runs/bf16-lightgcn-gowalla/rec/ckpts/lightgcn_paper-cuda/checkpoint/`.
 
 
 ## Artifacts

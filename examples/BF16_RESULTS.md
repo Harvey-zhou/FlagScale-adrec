@@ -43,7 +43,7 @@ named in the config column — the only change is the dtype.
 | `bf16-dssm` | `dssm` (MovieLens-1M) | 10 | Hit@100 0.199007 / NDCG@100 0.046237 | 174,542 |
 | `bf16-dssm-ml20m` | `dssm_ml20m` (MovieLens-20M) | 10 | Hit@100 0.162680 / NDCG@100 0.038281 | 179,481 |
 | `tt-bf16` | `two_tower` (synthetic) | 1 | loss 0.6923 / train 0.4402 | 1,006 |
-| `bf16-lightgcn-gowalla` | `lightgcn_paper` (Gowalla) | running (1000) | — | 3,225 |
+| `bf16-lightgcn-gowalla` | `lightgcn_paper` (Gowalla) | 1000 | recall@20 0.181994 / ndcg@20 0.155266 | 3,224 |
 | `bf16-lightgcn-yelp` | `lightgcn_yelp2018_paper`, batch 2048 | running (1000) | — | 4,215 |
 | `bf16-lightgcn-yelp-b1024` | `lightgcn_yelp2018_paper`, batch 1024 | running (1000) | — | 2,111 |
 
