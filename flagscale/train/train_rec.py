@@ -407,8 +407,28 @@ def train(config: DictConfig) -> None:
     early_stop_min_delta = float(train_cfg.get("early_stop_min_delta", 0.0))
     stopping = 0
     stopped_early = False
+    start_epoch = 1
+    latest_path = output_dir / "latest.pt"
+    resume = bool(os.environ.get("FLAGSCALE_RESUME")) or bool(train_cfg.get("resume", False))
+    if resume and latest_path.exists():
+        snapshot = torch.load(latest_path, map_location="cpu")
+        base_model.load_state_dict(snapshot["model"])
+        optimizer.load_state_dict(snapshot["optimizer"])
+        start_epoch = int(snapshot["epoch"]) + 1
+        best = snapshot["best"]
+        best["state"] = None
+        history = list(snapshot.get("history", []))
+        stopping = int(snapshot.get("stopping", 0))
+        last_eval = snapshot.get("last_eval")
+        torch.set_rng_state(snapshot["torch_rng"])
+        if getattr(data, "sampler", None) is not None and snapshot.get("sampler_rng") is not None:
+            data.sampler.rng.bit_generator.state = snapshot["sampler_rng"]
+        log(f"resumed from {latest_path} at epoch {start_epoch - 1}/{epochs} "
+            f"(best {select_metric}={best['value']:.4f} at epoch {best['epoch']})")
+    elif resume:
+        log(f"resume requested but {latest_path} does not exist; starting from epoch 1")
     started = time.time()
-    for epoch in range(1, epochs + 1):
+    for epoch in range(start_epoch, epochs + 1):
         if task == "graph":
             data.sampler.resample()
         stats = train_epoch(model, data, epoch, task, device, optimizer, bpr_decay, dtype_name, platform, log_every)
@@ -453,6 +473,22 @@ def train(config: DictConfig) -> None:
             with temporary.open("w", encoding="utf-8") as file:
                 json.dump(history, file, indent=2)
             temporary.replace(output_dir / "history.json")
+            # Resume point: the *latest* weights and optimizer state, written
+            # every epoch.  model.pt keeps the best monitored epoch instead.
+            snapshot = {
+                "epoch": epoch,
+                "model": {k: v.detach().cpu() for k, v in base_model.state_dict().items()},
+                "optimizer": optimizer.state_dict(),
+                "best": {k: v for k, v in best.items() if k != "state"},
+                "history": history,
+                "stopping": stopping,
+                "last_eval": last_eval,
+                "torch_rng": torch.get_rng_state(),
+                "sampler_rng": (data.sampler.rng.bit_generator.state
+                                if getattr(data, "sampler", None) is not None else None),
+            }
+            torch.save(snapshot, output_dir / "latest.pt.tmp")
+            (output_dir / "latest.pt.tmp").replace(latest_path)
         if dist.is_available() and dist.is_initialized():
             shared = stop.to(device)
             dist.broadcast(shared, src=0)
@@ -464,14 +500,21 @@ def train(config: DictConfig) -> None:
             stopped_early = True
             break
 
+    def restore_best() -> None:
+        if best["state"] is not None:
+            base_model.load_state_dict(best["state"])
+        elif (output_dir / "model.pt").exists():
+            # After a resume the in-memory best state is gone; model.pt holds it.
+            base_model.load_state_dict(torch.load(output_dir / "model.pt", map_location="cpu"))
+
     if rank_zero():
         if task == "sequential":
-            base_model.load_state_dict(best["state"])
+            restore_best()
             final = evaluate("test")
             headline = {"protocol": "best validation epoch restored, then test", "best_epoch": best["epoch"],
                         "validation": best["metrics"], "test": final}
         elif early_stop_patience > 0:
-            base_model.load_state_dict(best["state"])
+            restore_best()
             final = evaluate("test")
             headline = {"protocol": f"best monitored epoch restored after a {early_stop_patience}-evaluation "
                                     "patience", "best_epoch": best["epoch"],
