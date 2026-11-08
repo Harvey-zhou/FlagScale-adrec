@@ -51,14 +51,14 @@ this file lives in a public repository.
 | RAM | 2003 GiB |
 | MLU | 8× MLU590-M9, 96 GiB each, all healthy, ECC errors 0 |
 | MLU PCIe | Gen4 x16 per card, replay counter 0 |
-| MLU clock | 1200 MHz current vs 1600 MHz default — all cards capped (`Clock Setting: Active`) |
+| MLU clock | 1600 MHz default.  A 1200 MHz cap (`Clock Setting: Active`) was in place during the LightGCN run on 2026-11-07 and is off again since 11-08; the cap changes throughput only, not metrics |
 | Driver / firmware | 6.5.52 (runfile install, DKMS-built), firmware v1.5.0, `mlumsgd` running |
 | Storage | `/` 437 GB (109 GB free), `/srv` 11 TB (5.9 TB free) |
 | Network | 11 mlx5 HCAs, RoCE interfaces up |
 | Internet / mirrors | `huggingface.co` times out; `hf-mirror.com` works (`HF_ENDPOINT=https://hf-mirror.com`); GitHub `raw.githubusercontent.com` is blocked but `api.github.com` works (contents API with `Accept: application/vnd.github.raw` supports Range) |
 | Docker | installed; the login user is in the `docker` group (takes effect on a new login; `sg docker -c …` works in a running shell), set `DOCKER=docker` to skip sudo |
 | Vendor bundle | shared storage: drivers 6.2.29 and 6.5.52, `.deb` packages, cp312/pt2.12.1 wheels, five container tars, SDK docs |
-| Open items | clock cap above; stale `cambricon-mlu-driver-dkms 6.2.29` dpkg/dkms record; no MagicMind (inference only, not needed for training) |
+| Open items | stale `cambricon-mlu-driver-dkms 6.2.29` dpkg/dkms record; no MagicMind (inference only, not needed for training); multi-node is unvalidated — CNCL reports "No available IB NIC" and there is no `/etc/cncl.conf`, so only single-node MLU-Link has been exercised |
 
 ## Entering the container
 
@@ -128,7 +128,7 @@ written in the container are root-owned.
 | rec `sasrec_beauty_paper` | 1 | HR@10 0.4684 / NDCG@10 0.3092 | 0.4604 / 0.3034 (2,079 s) | 0.4854 / 0.3219 (paper) | 10,838 | early stop @381; 2,058 s |
 | rec `sasrec_games_paper` | 1 | HR@10 0.7266 / NDCG@10 0.5222 | 0.7340 / 0.5281 (914 s) | 0.7410 / 0.5360 (paper) | 9,305 | early stop @133; 409 s |
 | rec `sasrec_steam_paper` | 1 | HR@10 0.8614 / NDCG@10 0.6167 | 0.8589 / 0.6150 (4,702 s) | 0.8729 / 0.6306 (paper) | 10,672 | early stop @108; 3,416 s |
-| rec `lightgcn_paper` (Gowalla, 2-card DDP) | 2 | recall@20 0.1820 / ndcg@20 0.1550 | 0.1820 / 0.1553 (70 h, 1 card) | 0.1823 / 0.1555 (paper) | 63,700 | 1,000 epochs, 3 h 43 m; batch 512/rank (global 1024); `index_add` |
+| rec `lightgcn_paper` (Gowalla, 2-card DDP) | 2 | recall@20 0.1820 / ndcg@20 0.1550 | 0.1820 / 0.1553 (70 h, 1 card) | 0.1823 / 0.1555 (paper) | 63,700 | 1,000 epochs, 3 h 43 m; batch 512/rank (global 1024); `index_add`; ran with the 1200 MHz clock cap, so throughput is a lower bound |
 | rec `dssm` (ML-1M) | 1 | Recall@100 0.2123 | — | 0.1474 (torch-rechub README) | 312,074 | exact full-catalogue ranking; the reference uses Annoy, so not strictly like-for-like |
 | rec `two_tower` (synthetic) | 1 | neg_loss −0.6923 | — | none published | 7,045 | 100 steps; pipeline check only |
 
