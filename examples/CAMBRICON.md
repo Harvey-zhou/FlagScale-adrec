@@ -149,8 +149,10 @@ only when the training code has not changed in between:
   `dssm`, `lightgcn`; compare with the reference numbers.  The P800 run of
   `lightgcn_yelp2018_paper` was still in progress on 2026-11-03.
 
-Throughput: the cards run capped at 1200 MHz (default 1600, see Host
-inventory), so record the clock with every samples/s figure.
+Throughput: the clock is not fixed.  Idle cards report 1200 MHz with
+`Clock Setting: Active`, but the setting clears under load and the observed
+rec-training clock is 1600 MHz (dense-matmul stress can instead hit the
+550 W TDP cap at ~1236 MHz).  Record the clock with every samples/s figure.
 
 ## How the launcher keeps a run honest
 
