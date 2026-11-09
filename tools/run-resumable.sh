@@ -34,6 +34,14 @@ while [ "$attempt" -lt 40 ]; do
     resume=0
   fi
   echo "===== $name attempt $attempt (resume=$resume) $(date '+%F %T') ====="
+  # A crash can leave the worker alive as an orphan (torchrun dies first), which
+  # would compete with the resumed run for the same checkpoint directory.
+  for pattern in "train_rec.py --config-file=$out" "train_ads.py --config-file=$out"; do
+    pgrep -f "$pattern" 2>/dev/null | while read -r pid; do
+      kill -9 "$pid" 2>/dev/null
+    done
+  done
+  sleep 5
   FLAGSCALE_RESUME=$resume bash examples/run-adrec-kunlunxin.sh "$module" "$config" "$card" "$@" \
     >> "$out/launch.log" 2>&1
   sleep 60
