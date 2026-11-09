@@ -237,5 +237,7 @@ A100 × 折扣系数 × 0.8，精度 ≥ A100 的 95%。寒武纪折扣系数 1.
   BGE、CLIP 都是单卡（`world_size=1`），不走这条，所以没有加 `mlu`；
   以后要在 MLU 上跑 DDP 多卡，先验证 torch_mlu 的 DDP 是否需要 `device_ids`。
 - `megatron_pp.py` 里的 `torch.cuda.*` 调用不在本方案范围内，见第 1 节的退路说明。
-- Torch-FL 路线（`device_type=flagos`）缺寒武纪后端，不在本方案内；
+- Torch-FL 路线（`device_type=flagos`）不在本方案内。它的寒武纪后端 2026-11-04 起已存在，
+  但对检索三模型仍有缺口（CLIP 的卷积反向会报错、dtype 转换经主机、`index.Tensor` / `mul_.Tensor` 回退 CPU、
+  通信没有可用路径），详见 [15-torch-fl-cambricon-gaps.md](15-torch-fl-cambricon-gaps.md)。
   `CLAUDE.md` 与算子清单 xlsx 里"`device_type=flagos`"的写法描述的是那条路线。
