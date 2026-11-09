@@ -12,10 +12,10 @@ Status: adapter, launcher and container wrapper written.  Two MLU590-M9 nodes
 are in use (see "Two MLU nodes" below).  On node A (2026-11-03): preflight plus
 the `ads` `din` / `deepfm` / `dcn_mix` smokes, and single-card full training is
 in progress there.  On node B (2026-11-09): the same `ads` smokes plus the
-`rec` `dssm` / `sasrec_paper` / `lightgcn` smokes (single card, strict mode, no
-CPU fallback; `lightgcn` used its default `sparse` propagation).  The
-`rec lightgcn_amazon_book` (Amazon-Book) experiment and the multi-card runs are
-still TODO.
+`rec` `dssm` / `sasrec_paper` / `lightgcn` / `lightgcn_amazon_book` smokes
+(single card, strict mode, no CPU fallback; both LightGCN configs used their
+default `sparse` propagation).  The full 1000-epoch `lightgcn_amazon_book` run
+and the multi-card runs are still TODO.
 
 ## Two MLU nodes
 
@@ -136,20 +136,23 @@ The `ads` rows were verified on node A (2026-11-03); the `rec` rows on node B
 | rec `sasrec_paper` | yes (exit 0, fallback off) | none | none | MovieLens-1M; 211,950 parameters; 3-step eval hr@10 0.1457 (not a result) |
 | rec `dssm` | yes (exit 0, fallback off) | none | none | MovieLens-1M two-tower (torch-rechub); 329,222 parameters; 3-step eval recall@10 0.0041 (not a result); `two_tower` is TorchRec's synthetic-data example and optional |
 | rec `lightgcn` | yes (exit 0, fallback off) | none | none | Gowalla; 4,533,696 parameters; the default `sparse` propagation runs on MLU, `index_add` not needed; 3-step eval recall@20 0.0007 (not a result) |
+| rec `lightgcn_amazon_book` | yes (exit 0, fallback off) | none | none | Amazon-Book; 9,231,488 parameters; `sparse` propagation runs on MLU; 3-step eval recall@20 0.0003 (not a result) |
 
 The 2026-11-09 `rec` smokes ran on node B (a second 8×MLU590-M9 node) with
 driver 6.2.29, torch 2.12.1+cpu, torch_mlu 1.34.1+torch2.12.1, CNRT 7.7.3,
 CNNL 2.2.18, CNCL 1.30.10 and MLU-OPS 1.13.0 (preflight logs under
 `<ADREC_OUT_ROOT>/<module>/logs/`).  Data: `AmazonElectronics_x1`,
 `Criteo_x1`, `MovieLens-1M` and `Gowalla`, md5-checked against the values in
-`ads/EVIDENCE.md` before encoding.
+`ads/EVIDENCE.md` before encoding; `Amazon-Book` (`reczoo/AmazonBooks_m1`),
+md5-checked against that dataset's README and encoded to the published
+LightGCN split (52,643 users / 91,599 items / 2,380,730 train / 603,378 test).
 
 ## Training results
 
 | Config | Cards | Test metric | P800 same config | Reference | Train samples/s | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | TODO (node A, in progress) | | | | | | single-card full runs on node A |
-| `rec lightgcn_amazon_book` | 0 | TODO | | | | Amazon-Book; not yet run |
+| `rec lightgcn_amazon_book` | 0 | TODO | | paper recall@20 0.0410 / ndcg@20 0.0318 (Table 3) | | smoke passes; full 1000-epoch run not started |
 
 "P800 same config" is the Kunlunxin P800 run recorded in `ads/results/` or
 `rec/results/` (fp32, vendor torch 2.9.0).  It is a like-for-like comparison
