@@ -9,10 +9,11 @@ its Cambricon backend is a separate track.  Model, loss, data and metric code
 are the ones used on CUDA.
 
 Status: adapter, launcher and container wrapper written.  Done on 2026-11-03 /
-11-06 / 11-07: preflight, the `ads` smokes, single-card `rec` training
+11-06 / 11-07 / 11-09: preflight, the `ads` smokes, single-card `rec` training
 (`sasrec`, `dssm`, `two_tower`), the four paper-protocol SASRec runs (ML-1M,
 Beauty, Games, Steam), 2-card CNCL DDP on ML-1M, and the full LightGCN
-Gowalla paper run (1,000 epochs, 2 cards).  Multi-node is still TODO.
+Gowalla and Yelp2018 paper runs (1,000 epochs, 2 cards).  Multi-node is still
+TODO.
 
 ## Cluster environment
 
@@ -129,6 +130,7 @@ written in the container are root-owned.
 | rec `sasrec_games_paper` | 1 | HR@10 0.7266 / NDCG@10 0.5222 | 0.7340 / 0.5281 (914 s) | 0.7410 / 0.5360 (paper) | 9,305 | early stop @133; 409 s |
 | rec `sasrec_steam_paper` | 1 | HR@10 0.8614 / NDCG@10 0.6167 | 0.8589 / 0.6150 (4,702 s) | 0.8729 / 0.6306 (paper) | 10,672 | early stop @108; 3,416 s |
 | rec `lightgcn_paper` (Gowalla, 2-card DDP) | 2 | recall@20 0.1820 / ndcg@20 0.1550 | 0.1820 / 0.1553 (70 h, 1 card) | 0.1823 / 0.1555 (paper) | 63,700 | 1,000 epochs, 3 h 43 m; batch 512/rank (global 1024); `index_add`; the 1200 MHz seen on idle cards is an idle state — the cards ran at 1600 MHz during the run (sampled 2026-11-09), so this is a full-clock number |
+| rec `lightgcn_yelp2018_paper` (2-card DDP) | 2 | recall@20 0.0569 / ndcg@20 0.0462 | — (the P800 Yelp run did not finish) | 0.0639 / 0.0525 (paper; code 0.06347 / 0.05238) | 45,645 | 1,000 epochs, 7 h 58 m; best 0.0572 @760; ~11% below the reference — split identity / negative sampling / eval exclusions still to check |
 | rec `dssm` (ML-1M) | 1 | Recall@100 0.2123 | — | 0.1474 (torch-rechub README) | 312,074 | exact full-catalogue ranking; the reference uses Annoy, so not strictly like-for-like |
 | rec `two_tower` (synthetic) | 1 | neg_loss −0.6923 | — | none published | 7,045 | 100 steps; pipeline check only |
 
