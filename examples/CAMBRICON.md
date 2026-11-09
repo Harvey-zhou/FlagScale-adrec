@@ -8,13 +8,32 @@ The ads and rec models run on Cambricon cards through the vendor stack:
 its Cambricon backend is a separate track.  Model, loss, data and metric code
 are the ones used on CUDA.
 
-Status: adapter, launcher and container wrapper written.  First card runs done
-on 2026-11-03: preflight plus the `ads` `din` / `deepfm` / `dcn_mix` smokes on
-one MLU590-M9.  The `rec` configs and the multi-card runs are still TODO.
+Status: adapter, launcher and container wrapper written.  Two MLU590-M9 nodes
+are in use (see "Two MLU nodes" below).  On node A (2026-11-03): preflight plus
+the `ads` `din` / `deepfm` / `dcn_mix` smokes, and single-card full training is
+in progress there.  On node B (2026-11-09): the same `ads` smokes plus the
+`rec` `dssm` / `sasrec_paper` / `lightgcn` smokes (single card, strict mode, no
+CPU fallback; `lightgcn` used its default `sparse` propagation).  The
+`rec lightgcn_amazon_book` (Amazon-Book) experiment and the multi-card runs are
+still TODO.
 
-## Cluster environment
+## Two MLU nodes
 
-Most rows come straight from the preflight log,
+Two MLU590-M9 hosts are used, and a number has to name the node it came from.
+Hostnames and addresses are omitted on purpose: this file lives in a public
+repository.
+
+| Label | Role | MLU driver | Recorded in |
+| --- | --- | --- | --- |
+| node A | 2026-11-03 `ads` smokes; single-card full training in progress | 6.5.52 | Cluster environment, Host inventory and the `ads` rows of the operator probe |
+| node B | 2026-11-09 `ads` + `rec` smokes | 6.2.29 | Operator probe results and the note under it |
+
+Both have the same CPU, RAM and card layout (2× Hygon C86 7390, 2 TiB RAM,
+8× MLU590-M9); the MLU driver is what tells them apart.
+
+## Cluster environment (node A)
+
+This table is node A.  Most rows come straight from the preflight log,
 `<ADREC_OUT_ROOT>/<module>/logs/preflight-<config>.log` (one per config so that
 concurrent launches do not overwrite each other; `preflight.log` before 2026-11-04)
 (`PREFLIGHT_ONLY=1 bash examples/run-adrec-cambricon.sh ads din 0`).  The
@@ -36,7 +55,7 @@ host, driver and image rows were verified on 2026-11-03 with `cnmon`,
 | `ADREC_VENV` (or env activation script) | not needed: `/torch/venv3/pytorch` inside the 26.08 container is activated by the login shell and is also a launcher default | preflight.log |
 | Data root (`ADREC_DATA_ROOT`), md5 checked against EVIDENCE.md | `/srv/jiangxuhui/datasets`; `AmazonElectronics_x1` raw md5 `e9bf80b9…` / `57a20e82…` and `Criteo_x1` `30b89c1c…` / `f73c71fb…` / `2c48b26e…` match EVIDENCE.md; encoded with the `prepare_*.py` scripts | md5sum, prepare output |
 
-## Host inventory
+## Host inventory (node A)
 
 Verified 2026-11-03.  Hostnames and network addresses are left out on purpose:
 this file lives in a public repository.
@@ -106,20 +125,31 @@ written in the container are root-owned.
 
 ## Operator probe results
 
+The `ads` rows were verified on node A (2026-11-03); the `rec` rows on node B
+(2026-11-09).  The `ads` smokes also pass on node B.
+
 | Config | Strict smoke | Ops on CPU with fallback on | Ops with no MLU kernel | Notes |
 | --- | --- | --- | --- | --- |
 | ads `din` | yes (exit 0, fallback off) | none | none | CNNL warns `cnnlMasked_v4` is deprecated; 3-step eval AUC 0.5667 (not a result) |
 | ads `deepfm` | yes (exit 0, fallback off) | none | none | Criteo_x1 33.0M/8.25M/4.59M; 23.4M parameters |
 | ads `dcn_mix` | yes (exit 0, fallback off) | none | none | Criteo_x1; 21.9M parameters |
-| rec `sasrec` | TODO | | | |
-| rec `dssm` | TODO | | | the two-tower model of the six (torch-rechub, MovieLens-1M); `two_tower` is TorchRec's synthetic-data example and optional |
-| rec `lightgcn` | TODO | | | `sparse` vs `index_add` |
+| rec `sasrec_paper` | yes (exit 0, fallback off) | none | none | MovieLens-1M; 211,950 parameters; 3-step eval hr@10 0.1457 (not a result) |
+| rec `dssm` | yes (exit 0, fallback off) | none | none | MovieLens-1M two-tower (torch-rechub); 329,222 parameters; 3-step eval recall@10 0.0041 (not a result); `two_tower` is TorchRec's synthetic-data example and optional |
+| rec `lightgcn` | yes (exit 0, fallback off) | none | none | Gowalla; 4,533,696 parameters; the default `sparse` propagation runs on MLU, `index_add` not needed; 3-step eval recall@20 0.0007 (not a result) |
+
+The 2026-11-09 `rec` smokes ran on node B (a second 8×MLU590-M9 node) with
+driver 6.2.29, torch 2.12.1+cpu, torch_mlu 1.34.1+torch2.12.1, CNRT 7.7.3,
+CNNL 2.2.18, CNCL 1.30.10 and MLU-OPS 1.13.0 (preflight logs under
+`<ADREC_OUT_ROOT>/<module>/logs/`).  Data: `AmazonElectronics_x1`,
+`Criteo_x1`, `MovieLens-1M` and `Gowalla`, md5-checked against the values in
+`ads/EVIDENCE.md` before encoding.
 
 ## Training results
 
 | Config | Cards | Test metric | P800 same config | Reference | Train samples/s | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| TODO | | | | | | |
+| TODO (node A, in progress) | | | | | | single-card full runs on node A |
+| `rec lightgcn_amazon_book` | 0 | TODO | | | | Amazon-Book; not yet run |
 
 "P800 same config" is the Kunlunxin P800 run recorded in `ads/results/` or
 `rec/results/` (fp32, vendor torch 2.9.0).  It is a like-for-like comparison
