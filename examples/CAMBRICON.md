@@ -153,6 +153,7 @@ LightGCN split (52,643 users / 91,599 items / 2,380,730 train / 603,378 test).
 | --- | --- | --- | --- | --- | --- | --- |
 | TODO (node A, in progress) | | | | | | single-card full runs on node A |
 | `rec sasrec_paper` | 1 | HR@10 0.8174 / NDCG@10 0.5895 | HR@10 0.8204 / NDCG@10 0.5910 (P800 at `da5195a`, not checked) | paper 0.8245 / 0.5905 | 8,710 | node B; best epoch 143, early stop 163; `rec/results/sasrec_paper_movielens_1m_mlu.md` |
+| `rec dssm` | 1 | hit@100 0.1599 / ndcg@100 0.0334 | — (no P800 run) | torch-rechub Hit@100 14.74% | 303,033 | node B; 10 epochs; `rec/results/dssm_movielens_1m_mlu.md` |
 | `rec lightgcn_amazon_book` | 0 | TODO | | paper recall@20 0.0410 / ndcg@20 0.0318 (Table 3) | | smoke passes; full 1000-epoch run not started |
 
 "P800 same config" is the Kunlunxin P800 run recorded in `ads/results/` or
