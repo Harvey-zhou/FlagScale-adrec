@@ -16,8 +16,10 @@
 
 Follows the authors' PyTorch implementation (gusye1234/LightGCN-PyTorch,
 ``code/model.py``): N(0, 0.1) initialization, propagation over the symmetric
-normalized user-item adjacency ``D^-1/2 A D^-1/2`` without self loops, and the
-mean of the K+1 layer outputs as the final representation.
+normalized user-item adjacency ``D^-1/2 A D^-1/2``, and the mean of the K+1
+layer outputs as the final representation.  The paper text removes self-loops,
+but the released ``s_pre_adj_mat.npz`` is normalized from ``A+I``;
+``data.self_loops`` selects which variant to build (default: no self-loops).
 
 ``propagation`` selects how one propagation step is computed:
 

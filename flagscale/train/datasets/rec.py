@@ -215,14 +215,26 @@ class RecData:
     sampler: BPRSampleDataset | None = None
 
 
-def normalized_adjacency(users: np.ndarray, items: np.ndarray, n_users: int) -> dict[str, torch.Tensor]:
-    """Symmetric ``D^-1/2 A D^-1/2`` of the bipartite graph as directed edges."""
+def normalized_adjacency(users: np.ndarray, items: np.ndarray, n_users: int, n_items: int,
+                         self_loops: bool = False) -> dict[str, torch.Tensor]:
+    """Symmetric ``D^-1/2 A D^-1/2`` of the bipartite graph as directed edges.
+
+    ``self_loops`` adds the identity to ``A`` before normalizing.  The released
+    LightGCN-PyTorch data files ship ``s_pre_adj_mat.npz`` built that way, while
+    the paper text describes the no-self-loop variant; ``data.self_loops`` picks
+    which one to build.
+    """
 
     users = users.astype(np.int64)
     items = items.astype(np.int64) + n_users
+    n = n_users + n_items
     src = np.concatenate([users, items])
     dst = np.concatenate([items, users])
-    degree = np.bincount(src, minlength=int(max(src.max(), dst.max())) + 1).astype(np.float64)
+    if self_loops:
+        loops = np.arange(n, dtype=np.int64)
+        src = np.concatenate([src, loops])
+        dst = np.concatenate([dst, loops])
+    degree = np.bincount(src, minlength=n).astype(np.float64)
     weight = 1.0 / np.sqrt(degree[src] * degree[dst])
     return {
         "src": torch.from_numpy(src),
@@ -325,7 +337,8 @@ def build_rec_data(task: str, data_cfg: DictConfig, batch_size: int, eval_batch_
         return RecData(
             meta=meta,
             train=batch_loader(sampler, batch_size, True, pin_memory, 0, seed, distributed),
-            graph=normalized_adjacency(train_pairs["user"], train_pairs["item"], meta["n_users"]),
+            graph=normalized_adjacency(train_pairs["user"], train_pairs["item"], meta["n_users"],
+                                       meta["n_items"], bool(data_cfg.get("self_loops", False))),
             train_items=sampler.seen,
             test_items=test_pairs,
             sampler=sampler,
