@@ -155,6 +155,7 @@ LightGCN split (52,643 users / 91,599 items / 2,380,730 train / 603,378 test).
 | `rec sasrec_paper` | 1 | HR@10 0.8174 / NDCG@10 0.5895 | HR@10 0.8204 / NDCG@10 0.5910 (P800 at `da5195a`, not checked) | paper 0.8245 / 0.5905 | 8,710 | node B; best epoch 143, early stop 163; `rec/results/sasrec_paper_movielens_1m_mlu.md` |
 | `rec dssm` | 1 | hit@100 0.1599 / ndcg@100 0.0334 | — (no P800 run) | torch-rechub Hit@100 14.74% | 303,033 | node B; 10 epochs; `rec/results/dssm_movielens_1m_mlu.md` |
 | `ads deepfm_paper` | 4 | AUC 0.8039 / logloss 0.4477 | AUC 0.8040 / logloss 0.4477 | BARS 0.8137 / 0.4381 | 56k–219k (shared card) | node B; best epoch 1, early stop 6; `ads/results/deepfm_paper_criteo_x1_mlu.md` |
+| `ads dcn_mix_paper` | 6 | AUC 0.8104 / logloss 0.4411 | AUC 0.8104 / logloss 0.4411 | BARS 0.8142 / 0.4378 | 14,232 | node B; 3 epochs, best epoch 3; card shared during epoch 1; `ads/results/dcn_mix_paper_criteo_x1_mlu.md` |
 | `rec lightgcn_amazon_book` | 0 | TODO | | paper recall@20 0.0410 / ndcg@20 0.0318 (Table 3) | | smoke passes; full 1000-epoch run not started |
 
 "P800 same config" is the Kunlunxin P800 run recorded in `ads/results/` or
