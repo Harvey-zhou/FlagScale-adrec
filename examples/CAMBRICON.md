@@ -221,9 +221,38 @@ bash examples/cambricon-container.sh env PYTHONPATH=$PWD python tools/bench_infe
   --device mlu:0 --task ads --checkpoint <run>/checkpoint --data <dataset> --batch-size 8192 [--dtype bf16]
 ```
 
-Not yet run on a card: the tool was changed without an MLU at hand, so the first run
-should be a short one (e.g. `--task sequential` on the SASRec ML-1M checkpoint, which
-is also the cheapest BF16 probe) before the numbers go into the table.
+### Probe results (2026-11-11, node A, card 0)
+
+SASRec ML-1M checkpoint, `--task sequential`, batch 8192, one warm-up plus
+three timed passes:
+
+| dtype | autocast_active | s/pass | rows/s (mean) | rows/s (median) |
+| --- | --- | --- | --- | --- |
+| fp32 | false | 0.0266 / 0.0230 / 0.0233 | 249,935 | 259,380 |
+| bf16 | **true** | 0.0249 / 0.0212 / 0.0219 | **267,840 (+7.2 %)** | 276,425 (+6.6 %) |
+
+Training probe, `sasrec_paper` with `train.model.torch_dtype=bf16` (one card,
+`ENABLE_FALLBACK_TO_CPU=0`, no CPU fallback, no error):
+
+| dtype | epochs (best) | mean s/epoch | samples/s | train time | HR@10 | NDCG@10 |
+| --- | --- | --- | --- | --- | --- | --- |
+| fp32 | 163 (143) | 0.725 | 8,337 | 126.9 s | 0.81738 | 0.58953 |
+| bf16 | 146 (126) | 0.782 | 7,729 | 121.7 s | **0.81589** | **0.58953** |
+
+`autocast_active` is the tool's own check (`torch.is_autocast_enabled("mlu")`).
+For training the context was verified independently: a matmul inside
+`autocast_context(device, "bf16", platform_mlu)` returns `torch.bfloat16`.
+
+Reading: BF16 inference is ~7 % faster on this model.  BF16 training is
+numerically indistinguishable (NDCG identical, HR@10 −0.18 %) but ~8 % slower
+per epoch — a 212 k-parameter model is too small for the conversion overhead to
+pay off, and it finishes earlier only because it early-stops at epoch 146
+instead of 163.  Batch BF16 where the model is compute-bound (ads models,
+LightGCN), not for SASRec throughput.
+
+Probe checkpoint: `<ADREC_OUT_ROOT>/rec/ckpts/sasrec_paper-mlu` under a separate
+`ADREC_OUT_ROOT` (removed after recording); the figures above are from its
+`metrics.json` / `history.json` and the two bench JSON lines.
 
 ## How the launcher keeps a run honest
 
