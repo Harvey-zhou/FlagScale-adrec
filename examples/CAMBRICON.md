@@ -157,7 +157,7 @@ LightGCN split (52,643 users / 91,599 items / 2,380,730 train / 603,378 test).
 | `ads deepfm_paper` | 4 | AUC 0.8039 / logloss 0.4477 | AUC 0.8040 / logloss 0.4477 | BARS 0.8137 / 0.4381 | 56k–219k (shared card) | node B; best epoch 1, early stop 6; `ads/results/deepfm_paper_criteo_x1_mlu.md` |
 | `ads dcn_mix_paper` | 6 | AUC 0.8104 / logloss 0.4411 | AUC 0.8104 / logloss 0.4411 | BARS 0.8142 / 0.4378 | 14,232 | node B; 3 epochs, best epoch 3; card shared during epoch 1; `ads/results/dcn_mix_paper_criteo_x1_mlu.md` |
 | `ads din_paper_dice` | 7 | gAUC 0.8565 / AUC 0.8573 | gAUC 0.8575 / AUC 0.8587 | paper gAUC 0.8871 | 3,619 | node B; 50 epochs, best epoch 5; no NaN (P800 diverged at epoch 38); `ads/results/din_paper_dice_amazonelectronics_x1_mlu.md` |
-| `rec lightgcn_amazon_book` | 0 | running (epoch 196/1000) | | paper recall@20 0.0410 / ndcg@20 0.0318 (Table 3) | ~8,300 | node B; best test recall@20 0.0393 at epoch 180 so far; about 4.8 min/epoch |
+| `rec lightgcn_amazon_book` | 0 | running (epoch 430/1000) | | paper recall@20 0.0410 / ndcg@20 0.0318 (Table 3) | ~8,300 | node B; best test recall@20 0.0412 at epoch 400/420, already at the paper level; about 4.8 min/epoch |
 
 "P800 same config" is the Kunlunxin P800 run recorded in `ads/results/` or
 `rec/results/` (fp32, vendor torch 2.9.0).  It is a like-for-like comparison
