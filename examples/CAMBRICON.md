@@ -8,16 +8,34 @@ The ads and rec models run on Cambricon cards through the vendor stack:
 its Cambricon backend is a separate track.  Model, loss, data and metric code
 are the ones used on CUDA.
 
-Status: adapter, launcher and container wrapper written.  Done on 2026-11-03 /
-11-06 / 11-07 / 11-09: preflight, the `ads` smokes, single-card `rec` training
-(`sasrec`, `dssm`, `two_tower`), the four paper-protocol SASRec runs (ML-1M,
-Beauty, Games, Steam), 2-card CNCL DDP on ML-1M, and the full LightGCN
-Gowalla and Yelp2018 paper runs (1,000 epochs, 2 cards).  Multi-node is still
-TODO.
+Status: adapter, launcher and container wrapper written.  Two MLU590-M9 nodes
+are in use (see "Two MLU nodes" below).  Node A (2026-11-03 / 11-06 / 11-07 /
+11-09): preflight, the `ads` smokes, single-card `rec` training (`sasrec`,
+`dssm`, `two_tower`), the four paper-protocol SASRec runs (ML-1M, Beauty,
+Games, Steam), 2-card CNCL DDP on ML-1M, and the full LightGCN Gowalla and
+Yelp2018 runs (paper and code settings).  Node B (2026-11-09 / 11-11): the same
+`ads` and `rec` smokes, full `ads` `deepfm_paper` / `dcn_mix_paper` /
+`din_paper_dice`, `rec` `sasrec_paper` / `dssm`, and the 1,000-epoch
+`lightgcn_amazon_book` run (in progress).  `ads din_paper` is running on node A.
+Multi-node is still TODO.
 
-## Cluster environment
+## Two MLU nodes
 
-Most rows come straight from the preflight log,
+Two MLU590-M9 hosts are used, and a number has to name the node it came from.
+Hostnames and addresses are omitted on purpose: this file lives in a public
+repository.
+
+| Label | Role | MLU driver | Recorded in |
+| --- | --- | --- | --- |
+| node A | 2026-11-03..11 `ads` smokes, full `rec` runs (SASRec / DSSM / LightGCN), 2-card DDP, `ads din_paper` in progress | 6.5.52 | Cluster environment, Host inventory, operator probe and training results |
+| node B | 2026-11-09..11 `ads` + `rec` smokes, full `ads` runs, `rec` DSSM/SASRec, `lightgcn_amazon_book` in progress | 6.2.29 | Operator probe results, training results and the `*_mlu.md` run records |
+
+Both have the same CPU, RAM and card layout (2× Hygon C86 7390, 2 TiB RAM,
+8× MLU590-M9); the MLU driver is what tells them apart.
+
+## Cluster environment (node A)
+
+This table is node A.  Most rows come straight from the preflight log,
 `<ADREC_OUT_ROOT>/<module>/logs/preflight-<config>.log` (one per config so that
 concurrent launches do not overwrite each other; `preflight.log` before 2026-11-04)
 (`PREFLIGHT_ONLY=1 bash examples/run-adrec-cambricon.sh ads din 0`).  The
@@ -39,7 +57,7 @@ host, driver and image rows were verified on 2026-11-03 with `cnmon`,
 | `ADREC_VENV` (or env activation script) | not needed: `/torch/venv3/pytorch` inside the 26.08 container is activated by the login shell and is also a launcher default | preflight.log |
 | Data root (`ADREC_DATA_ROOT`), md5 checked against EVIDENCE.md | `/srv/jiangxuhui/datasets`; `AmazonElectronics_x1` raw md5 `e9bf80b9…` / `57a20e82…` and `Criteo_x1` `30b89c1c…` / `f73c71fb…` / `2c48b26e…` match EVIDENCE.md; `SASRec` Beauty/Games/Steam `.txt` come from the authors' repo (via `api.github.com`) and their row/count statistics match `PAPER_PROTOCOLS.md`; encoded with the `prepare_*.py` scripts | md5sum, prepare output |
 
-## Host inventory
+## Host inventory (node A)
 
 Verified 2026-11-03.  Hostnames and network addresses are left out on purpose:
 this file lives in a public repository.
@@ -109,31 +127,51 @@ written in the container are root-owned.
 
 ## Operator probe results
 
+The `ads` rows were verified on node A (2026-11-03); the `rec` rows on node B
+(2026-11-09).  The `ads` smokes also pass on node B.
+
 | Config | Strict smoke | Ops on CPU with fallback on | Ops with no MLU kernel | Notes |
 | --- | --- | --- | --- | --- |
 | ads `din` | yes (exit 0, fallback off) | none | none | CNNL warns `cnnlMasked_v4` is deprecated; 3-step eval AUC 0.5667 (not a result) |
 | ads `deepfm` | yes (exit 0, fallback off) | none | none | Criteo_x1 33.0M/8.25M/4.59M; 23.4M parameters |
 | ads `dcn_mix` | yes (exit 0, fallback off) | none | none | Criteo_x1; 21.9M parameters |
-| rec `sasrec` | yes (exit 0, fallback off) | none | none | ML-1M; 211,950 parameters |
-| rec `dssm` | yes (exit 0, fallback off) | none | none | MovieLens-1M; 329,222 parameters; the two-tower model of the six (torch-rechub); `two_tower` is TorchRec's synthetic-data example and optional |
-| rec `two_tower` | yes (exit 0, fallback off) | none | none | synthetic batches, 134.3M parameters |
-| rec `lightgcn` | yes (exit 0, fallback off) | none | none | `sparse` Coo runs on MLU; `index_add` was not needed |
+| rec `sasrec` | yes (exit 0, fallback off) | none | none | node A; ML-1M; 211,950 parameters |
+| rec `sasrec_paper` | yes (exit 0, fallback off) | none | none | node B; MovieLens-1M; 211,950 parameters; 3-step eval hr@10 0.1457 (not a result) |
+| rec `dssm` | yes (exit 0, fallback off) | none | none | MovieLens-1M; 329,222 parameters; 3-step eval recall@10 0.0041 (not a result); the two-tower model of the six (torch-rechub); `two_tower` is TorchRec's synthetic-data example and optional |
+| rec `two_tower` | yes (exit 0, fallback off) | none | none | node A; synthetic batches, 134.3M parameters |
+| rec `lightgcn` | yes (exit 0, fallback off) | none | none | node A/B; Gowalla; 4,533,696 parameters; the default `sparse` COO propagation runs on MLU, `index_add` not needed; 3-step eval recall@20 0.0007 (not a result) |
+| rec `lightgcn_amazon_book` | yes (exit 0, fallback off) | none | none | node B; Amazon-Book; 9,231,488 parameters; `sparse` propagation runs on MLU; 3-step eval recall@20 0.0003 (not a result) |
+
+The 2026-11-09 `rec` smokes ran on node B (a second 8×MLU590-M9 node) with
+driver 6.2.29, torch 2.12.1+cpu, torch_mlu 1.34.1+torch2.12.1, CNRT 7.7.3,
+CNNL 2.2.18, CNCL 1.30.10 and MLU-OPS 1.13.0 (preflight logs under
+`<ADREC_OUT_ROOT>/<module>/logs/`).  Data: `AmazonElectronics_x1`,
+`Criteo_x1`, `MovieLens-1M` and `Gowalla`, md5-checked against the values in
+`ads/EVIDENCE.md` before encoding; `Amazon-Book` (`reczoo/AmazonBooks_m1`),
+md5-checked against that dataset's README and encoded to the published
+LightGCN split (52,643 users / 91,599 items / 2,380,730 train / 603,378 test).
 
 ## Training results
 
 | Config | Cards | Test metric | P800 same config | Reference | Train samples/s | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| rec `sasrec` (ML-1M, code defaults) | 1 | HR@10 0.8180 / NDCG@10 0.5892 | — (P800 ran `sasrec_paper`: 0.8204 / 0.5910) | 0.8190–0.8225 / 0.5897–0.5918 (pmixer code) | 8,592 | 200 epochs, 141 s total |
-| rec `sasrec_paper` (ML-1M) | 1 | HR@10 0.8174 / NDCG@10 0.5895 | 0.8204 / 0.5910 (197 s) | 0.8245 / 0.5905 (paper) | 8,337 | early stop @163; 127 s |
-| rec `sasrec` (ML-1M, 2-card DDP) | 2 | HR@10 0.8190 / NDCG@10 0.5925 | — | 0.8190–0.8225 / 0.5897–0.5918 (pmixer code) | 9,805 | CNCL over MLU-Link; 1.14× the 1-card throughput; 123 s |
-| rec `sasrec_beauty_paper` | 1 | HR@10 0.4684 / NDCG@10 0.3092 | 0.4604 / 0.3034 (2,079 s) | 0.4854 / 0.3219 (paper) | 10,838 | early stop @381; 2,058 s |
-| rec `sasrec_games_paper` | 1 | HR@10 0.7266 / NDCG@10 0.5222 | 0.7340 / 0.5281 (914 s) | 0.7410 / 0.5360 (paper) | 9,305 | early stop @133; 409 s |
-| rec `sasrec_steam_paper` | 1 | HR@10 0.8614 / NDCG@10 0.6167 | 0.8589 / 0.6150 (4,702 s) | 0.8729 / 0.6306 (paper) | 10,672 | early stop @108; 3,416 s |
-| rec `lightgcn_paper` (Gowalla, 2-card DDP) | 2 | recall@20 0.1820 / ndcg@20 0.1550 | 0.1820 / 0.1553 (70 h, 1 card) | 0.1823 / 0.1555 (paper) | 63,700 | 1,000 epochs, 3 h 43 m; batch 512/rank (global 1024); `index_add`; the 1200 MHz seen on idle cards is an idle state — the cards ran at 1600 MHz during the run (sampled 2026-11-09), so this is a full-clock number |
-| rec `lightgcn_yelp2018_paper` (paper settings: xavier, batch 1024, λ=1e-3) | 2 | recall@20 0.0569 / ndcg@20 0.0462 | — (the P800 Yelp run did not finish) | 0.0639 / 0.0525 (paper) | 45,645 | 1,000 epochs, 7 h 58 m; the gap is the paper-vs-code settings difference, see the next row |
-| rec `lightgcn_yelp2018_paper` (code settings: normal init, batch 2048, self-loops, λ=1e-4) | 2 | recall@20 0.0632 / ndcg@20 0.0522 | — | 0.06347 / 0.05238 (authors' code) | 89,619 | 1,000 epochs, 4 h 49 m; reproduces the reference to 0.0003; the Yelp data files are md5-identical to the authors' |
-| rec `dssm` (ML-1M) | 1 | Recall@100 0.2123 | — | 0.1474 (torch-rechub README) | 312,074 | exact full-catalogue ranking; the reference uses Annoy, so not strictly like-for-like |
-| rec `two_tower` (synthetic) | 1 | neg_loss −0.6923 | — | none published | 7,045 | 100 steps; pipeline check only |
+| rec `sasrec` (ML-1M, code defaults, node A) | 1 | HR@10 0.8180 / NDCG@10 0.5892 | — (P800 ran `sasrec_paper`: 0.8204 / 0.5910) | 0.8190–0.8225 / 0.5897–0.5918 (pmixer code) | 8,592 | 200 epochs, 141 s total |
+| rec `sasrec_paper` (ML-1M, nodes A and B) | 1 | HR@10 0.8174 / NDCG@10 0.5895 | 0.8204 / 0.5910 (197 s) | 0.8245 / 0.5905 (paper) | 8,337–8,710 | early stop @163 (best 143); 127 s; node B file `rec/results/sasrec_paper_movielens_1m_mlu.md` |
+| rec `sasrec` (ML-1M, 2-card DDP, node A) | 2 | HR@10 0.8190 / NDCG@10 0.5925 | — | 0.8190–0.8225 / 0.5897–0.5918 (pmixer code) | 9,805 | CNCL over MLU-Link; 1.14× the 1-card throughput; 123 s |
+| rec `sasrec_beauty_paper` (node A) | 1 | HR@10 0.4684 / NDCG@10 0.3092 | 0.4604 / 0.3034 (2,079 s) | 0.4854 / 0.3219 (paper) | 10,838 | early stop @381; 2,058 s |
+| rec `sasrec_games_paper` (node A) | 1 | HR@10 0.7266 / NDCG@10 0.5222 | 0.7340 / 0.5281 (914 s) | 0.7410 / 0.5360 (paper) | 9,305 | early stop @133; 409 s |
+| rec `sasrec_steam_paper` (node A) | 1 | HR@10 0.8614 / NDCG@10 0.6167 | 0.8589 / 0.6150 (4,702 s) | 0.8729 / 0.6306 (paper) | 10,672 | early stop @108; 3,416 s |
+| rec `lightgcn_paper` (Gowalla, 2-card DDP, node A) | 2 | recall@20 0.1820 / ndcg@20 0.1550 | 0.1820 / 0.1553 (70 h, 1 card) | 0.1823 / 0.1555 (paper) | 63,700 | 1,000 epochs, 3 h 43 m; batch 512/rank (global 1024); `index_add`; the 1200 MHz seen on idle cards is an idle state — the cards ran at 1600 MHz during the run (sampled 2026-11-09), so this is a full-clock number |
+| rec `lightgcn_yelp2018_paper` (paper settings, node A) | 2 | recall@20 0.0569 / ndcg@20 0.0462 | — (the P800 Yelp run did not finish) | 0.0639 / 0.0525 (paper) | 45,645 | 1,000 epochs, 7 h 58 m; the gap is the paper-vs-code settings difference, see the next row |
+| rec `lightgcn_yelp2018_paper` (code settings, node A) | 2 | recall@20 0.0632 / ndcg@20 0.0522 | — | 0.06347 / 0.05238 (authors' code) | 89,619 | 1,000 epochs, 4 h 49 m; reproduces the reference to 0.0003; the Yelp data files are md5-identical to the authors' |
+| ads `deepfm_paper` (node B, card 4) | 1 | AUC 0.8039 / logloss 0.4477 | AUC 0.8040 / logloss 0.4477 | BARS 0.8137 / 0.4381 | 56k–219k (shared card) | best epoch 1, early stop 6; `ads/results/deepfm_paper_criteo_x1_mlu.md` |
+| ads `dcn_mix_paper` (node B, card 6) | 1 | AUC 0.8104 / logloss 0.4411 | AUC 0.8104 / logloss 0.4411 | BARS 0.8142 / 0.4378 | 14,232 | 3 epochs, best epoch 3; `ads/results/dcn_mix_paper_criteo_x1_mlu.md` |
+| ads `din_paper_dice` (node B, card 7) | 1 | gAUC 0.8565 / AUC 0.8573 | gAUC 0.8575 / AUC 0.8587 | paper gAUC 0.8871 | 3,619 | 50 epochs, best epoch 5; no NaN (P800 diverged at epoch 38); `ads/results/din_paper_dice_amazonelectronics_x1_mlu.md` |
+| ads `din_paper` (node A, card 4) | 1 | running (epoch 1/50) | gAUC 0.8555 (P800) | paper gAUC 0.8818 | — | started 2026-11-11 |
+| rec `dssm` (ML-1M, node A) | 1 | Recall@100 0.2123 | — | 0.1474 (torch-rechub README) | 312,074 | exact full-catalogue ranking; the reference uses Annoy, so not strictly like-for-like |
+| rec `dssm` (ML-1M, node B, card 1) | 1 | hit@100 0.1599 / ndcg@100 0.0334 | — (no P800 run) | torch-rechub Hit@100 14.74% | 303,033 | 10 epochs; `rec/results/dssm_movielens_1m_mlu.md` |
+| rec `lightgcn_amazon_book` (node B, card 0) | 1 | running (epoch 430/1000) | — | paper recall@20 0.0410 / ndcg@20 0.0318 | ~8,300 | best recall@20 0.0412 at epochs 400/420, already at the paper level; ~4.8 min/epoch |
+| rec `two_tower` (synthetic, node A) | 1 | neg_loss −0.6923 | — | none published | 7,045 | 100 steps; pipeline check only |
 
 Yelp2018 reproduction note: the two Yelp rows differ only in the reference's
 own settings.  The paper text specifies Xavier init, batch 1024 and λ=1e-3
