@@ -58,11 +58,12 @@ property of the vendor kernel mix, not of the models.
 
 ### Cambricon MLU590-M9 (2026-11-11)
 
-Same definition, `--device mlu:0`, batch 8192, SASRec ML-1M checkpoint:
+Same definition, `--device mlu:0`, **batch 1024** (aligned with the table above),
+SASRec ML-1M checkpoint:
 
 | Model | Dataset | Rows per pass | FP32 s/pass | FP32 rows/s | BF16 s/pass | BF16 rows/s |
 | --- | --- | --- | --- | --- | --- | --- |
-| SASRec | MovieLens-1M test (6,040 users × 101 candidates) | 6,040 | 0.0243 | 249,935 | 0.0227 | **267,840** |
+| SASRec | MovieLens-1M test (6,040 users × 101 candidates) | 6,040 | 0.0295 | 204,784 | 0.0271 | **223,397** |
 
 `autocast_active=true` for the BF16 pass.  Here BF16 *helps* (unlike the P800
 SASRec row), so the vendor kernel mix matters more than the model shape.  The

@@ -220,13 +220,17 @@ bash examples/cambricon-container.sh env PYTHONPATH=$PWD python tools/bench_infe
 
 ### Probe results (2026-11-11, node A, card 0)
 
-SASRec ML-1M checkpoint, `--task sequential`, batch 8192, one warm-up plus
-three timed passes:
+SASRec ML-1M checkpoint, `--task sequential`, **batch 1024** (the batch the
+reference table uses), one warm-up plus three timed passes:
 
 | dtype | autocast_active | s/pass | rows/s (mean) | rows/s (median) |
 | --- | --- | --- | --- | --- |
-| fp32 | false | 0.0266 / 0.0230 / 0.0233 | 249,935 | 259,380 |
-| bf16 | **true** | 0.0249 / 0.0212 / 0.0219 | **267,840 (+7.2 %)** | 276,425 (+6.6 %) |
+| fp32 | false | 0.0287 / 0.0297 / 0.0301 | 204,784 | 203,379 |
+| bf16 | **true** | 0.0276 / 0.0268 / 0.0268 | **223,397 (+9.1 %)** | 225,399 (+10.8 %) |
+
+The first probe used batch 8192 (249,935 / 267,840 rows/s); it is not comparable
+with the P800 table's batch-1024 SASRec row, so the numbers above are the aligned
+ones.
 
 Training probe, `sasrec_paper` with `train.model.torch_dtype=bf16` (one card,
 `ENABLE_FALLBACK_TO_CPU=0`, no CPU fallback, no error):
@@ -240,12 +244,12 @@ Training probe, `sasrec_paper` with `train.model.torch_dtype=bf16` (one card,
 For training the context was verified independently: a matmul inside
 `autocast_context(device, "bf16", platform_mlu)` returns `torch.bfloat16`.
 
-Reading: BF16 inference is ~7 % faster on this model.  BF16 training is
-numerically indistinguishable (NDCG identical, HR@10 −0.18 %) but ~8 % slower
-per epoch — a 212 k-parameter model is too small for the conversion overhead to
-pay off, and it finishes earlier only because it early-stops at epoch 146
-instead of 163.  Batch BF16 where the model is compute-bound (ads models,
-LightGCN), not for SASRec throughput.
+Reading: BF16 inference is ~9 % faster on this model (mean; ~11 % median).  BF16
+training is numerically indistinguishable (NDCG identical, HR@10 −0.18 %) but
+~8 % slower per epoch — a 212 k-parameter model is too small for the conversion
+overhead to pay off, and it finishes earlier only because it early-stops at
+epoch 146 instead of 163.  Batch BF16 where the model is compute-bound (ads
+models, LightGCN), not for SASRec throughput.
 
 Probe checkpoint: `<ADREC_OUT_ROOT>/rec/ckpts/sasrec_paper-mlu` under a separate
 `ADREC_OUT_ROOT` (removed after recording); the figures above are from its
