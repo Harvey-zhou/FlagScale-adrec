@@ -45,6 +45,7 @@ One warm-up pass + three timed passes, batch 8192 (ads) / 1024 (SASRec).
 | DeepFM | Criteo_x1 test (4,587,167) | 4,587,167 | 4.568 | **1,004,304** | 3.863 | 1,187,606 |
 | SASRec | MovieLens-1M test (6,040 users × 101 candidates) | 6,040 | 0.0675 | **89,455** | 0.200 | 30,488 |
 | LightGCN | Gowalla test (29,858 users, full ranking) | pending | | | | |
+| DSSM | MovieLens-1M test (6,040 users, full-catalogue retrieval) | pending | | | | |
 
 *Rows per pass* is one test example: an impression for the ads models, a user
 with its 101 candidates for SASRec.
@@ -76,8 +77,20 @@ python tools/bench_inference.py --task ads \
   --batch-size 8192 [--dtype bf16]
 ```
 
-`--task sequential` and `--task graph` cover the rec models.  Training
-throughput is read from `history.json`:
+`--task sequential`, `--task graph` and `--task two_tower` cover the rec models.
+
+`--task two_tower` (DSSM) is full-catalogue retrieval and reports two numbers,
+both in test queries per second, over `--repeat` passes (default 10, because a
+pass on MovieLens-1M is short; read the median):
+
+* `rows_per_s_*` — the whole pass: item tower over the full catalogue, user
+  tower over the test queries, and the query x catalogue score matrix;
+* `online_rows_per_s_*` — the same pass without the catalogue encoding, which a
+  serving system builds offline.
+
+As for LightGCN, top-k and Hit/NDCG are excluded.  `--task synthetic_two_tower`
+times TorchRec's random-data two-tower example as pair scoring (no `--data`).
+Training throughput is read from `history.json`:
 
 ```bash
 python -c "import json,statistics; h=json.load(open('<run>/checkpoint/history.json')); \
