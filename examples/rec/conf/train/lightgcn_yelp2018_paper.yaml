@@ -1,7 +1,9 @@
 # LightGCN paper protocol -- He et al., SIGIR 2020 (arXiv:2002.02126v4) -- Yelp2018.
 #
 # Not the same as `lightgcn.yaml` (authors' code defaults, batch 2048, N(0,0.1)
-# init).  This one follows the paper's stated settings.  Tags:
+# init).  This one follows the paper's stated settings; for the released code's
+# settings and the reference numbers they produce, see
+# `lightgcn_yelp2018_code.yaml`.  Tags:
 #   [paper] stated in the paper and must not change for a paper run
 #   [code]  not in the paper, taken from gusye1234/LightGCN-PyTorch or kuandeng/LightGCN
 #   [ours]  neither specifies it; a documented free choice

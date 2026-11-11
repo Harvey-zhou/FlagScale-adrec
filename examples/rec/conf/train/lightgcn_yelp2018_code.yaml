@@ -1,0 +1,41 @@
+# LightGCN authors' code settings -- gusye1234/LightGCN-PyTorch -- Yelp2018.
+#
+# The paper text and the released code disagree on several Yelp2018 defaults.
+# The code README numbers (recall@20 0.06347, ndcg@20 0.05238) come from:
+#   * N(0, 0.1) init (the Xavier lines in code/model.py are commented out),
+#   * batch 2048 (code/parse.py bpr_batch default; the paper says 1024),
+#   * the shipped s_pre_adj_mat.npz adjacency, i.e. D^-1/2 (A+I) D^-1/2,
+#   * lambda = 1e-4 (code/parse.py --decay default; the paper says 1e-3).
+# With these settings a 2-card MLU run reproduces 0.0632 / 0.0522
+# (1,000 epochs, see examples/CAMBRICON.md).  Keep the *global* batch at 2048:
+# on two cards pass `train.batch_size=1024`.
+#
+# Use `lightgcn_yelp2018_paper.yaml` for the paper-text protocol instead.
+name: lightgcn_yelp2018_code
+task: graph
+seed: 2020                      # [code] LightGCN-PyTorch default
+batch_size: 2048                # [code] parse.py bpr_batch default; paper says 1024
+epochs: 1000
+eval_every: 20
+early_stop_patience: 0
+select_metric: recall@20
+topk: [20]
+log_every: 0
+output_dir: ${experiment.exp_dir}/checkpoint
+
+model:
+  model_type: lightgcn
+  torch_dtype: fp32
+  embedding_dim: 64
+  num_layers: 3
+  propagation: index_add
+  init: normal                  # [code] code/model.py nn.init.normal_(std=0.1)
+
+data:
+  path: ${oc.env:FLAGOS_REC_DATA,/flagos-rec/datasets}/yelp2018_lightgcn
+  self_loops: true              # [code] s_pre_adj_mat.npz normalizes A+I
+
+optimizer:
+  lr: 1.0e-3
+  weight_decay: 0.0
+  bpr_weight_decay: 1.0e-4      # [code] parse.py --decay default

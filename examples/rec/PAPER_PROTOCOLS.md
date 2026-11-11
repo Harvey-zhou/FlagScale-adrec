@@ -93,6 +93,20 @@ Paper target (Table 3, 3 layers): **Gowalla recall@20 0.1823 / ndcg@20 0.1555**
 (released PyTorch code: 0.1824 / 0.1547); **Yelp2018 recall@20 0.0639 /
 ndcg@20 0.0525**.
 
+### Paper text vs released code on Yelp2018
+
+The Table 3 target and the code README (0.06347 / 0.05238) are not produced by
+the same settings.  `lightgcn_yelp2018_paper.yaml` follows the paper text
+(Xavier init, batch 1024, λ=1e-3, no self-loops) and gives recall@20 0.0569 on
+this branch.  The released code instead defaults to N(0, 0.1) init, batch 2048,
+λ=1e-4 and ships `s_pre_adj_mat.npz` normalized from `A+I`; those settings are
+in `lightgcn_yelp2018_code.yaml` and reproduce the reference at
+**0.0632 / 0.0522**.  For a two-card run pass `train.batch_size=1024` so the
+global batch stays 2048.  Data check: the Yelp `train.txt` / `test.txt` are
+byte-identical to the authors' files (md5 `1b8b5d22…` / `0d57d739…`); self-loops
+alone add ~0.0004, init and batch alone do not move the number, and the λ
+difference is what closes the gap.  Full record: `examples/CAMBRICON.md`.
+
 ### Early stopping conflict
 
 The paper says "the early stopping and validation strategies are the same as
