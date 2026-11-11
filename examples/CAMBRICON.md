@@ -204,6 +204,24 @@ Throughput: the clock is not fixed.  Idle cards report 1200 MHz with
 rec-training clock is 1600 MHz (dense-matmul stress can instead hit the
 550 W TDP cap at ~1236 MHz).  Record the clock with every samples/s figure.
 
+## Inference throughput
+
+`tools/bench_inference.py --device mlu:<card>` times a pass on the MLU: the device is
+resolved through the platform adapter, the timing synchronises `torch.mlu`, and
+`--dtype bf16` enters `torch.autocast("mlu")` or stops the run (the result's
+`autocast_active` says which).  The tool sets `ENABLE_FALLBACK_TO_CPU=0` when it is
+unset, so an operator without an MLU kernel fails the run instead of being timed on
+the CPU.  Definition and the other tasks: [EFFICIENCY.md](EFFICIENCY.md).
+
+```bash
+bash examples/cambricon-container.sh env PYTHONPATH=$PWD python tools/bench_inference.py \
+  --device mlu:0 --task ads --checkpoint <run>/checkpoint --data <dataset> --batch-size 8192 [--dtype bf16]
+```
+
+Not yet run on a card: the tool was changed without an MLU at hand, so the first run
+should be a short one (e.g. `--task sequential` on the SASRec ML-1M checkpoint, which
+is also the cheapest BF16 probe) before the numbers go into the table.
+
 ## How the launcher keeps a run honest
 
 * **No silent CPU fallback.** torch_mlu runs an operator it has no MLU kernel

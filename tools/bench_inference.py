@@ -35,7 +35,21 @@ Examples::
     python tools/bench_inference.py --task synthetic_two_tower --checkpoint <dir>
 
 Add ``--dtype bf16`` to run the forward pass under ``torch.autocast`` (the
-capability probe for BF16 inference).
+capability probe for BF16 inference).  If autocast cannot be entered on the
+device the run stops with an error instead of timing an fp32 pass.
+
+Devices: ``--device cuda`` (default; also vendor torch builds that report their
+card as ``cuda``) and ``cpu`` need nothing else.  Any other value is a FlagScale
+platform name, optionally with a card index, e.g. ``--device mlu:1``; it is
+resolved through ``flagscale.platforms`` (the same adapters the trainers use), and
+the timing synchronises that device's own runtime, not ``torch.cuda``.  On a
+platform where an operator without a device kernel can silently run on the CPU the
+timing would be wrong; for ``mlu`` this tool sets ``ENABLE_FALLBACK_TO_CPU=0`` when
+it is unset, so such an operator fails the run.  The result records the device and
+whether autocast was active.
+
+    env PYTHONPATH=$PWD python tools/bench_inference.py --device mlu:0 --task ads \
+        --checkpoint <dir> --data <dataset> [--dtype bf16]
 """
 
 from __future__ import annotations
@@ -56,6 +70,8 @@ from flagscale.models.ads import build_ads_model
 from flagscale.models.rec import build_rec_model
 from flagscale.train.datasets.ads import build_ads_loaders
 from flagscale.train.datasets.rec import build_rec_data
+
+NATIVE_DEVICES = ("cpu", "cuda")
 
 
 def parse_args() -> argparse.Namespace:
@@ -78,10 +94,62 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def autocast(device: torch.device, dtype: str):
-    if dtype == "fp32" or device.type != "cuda":
+def resolve_device(spec: str) -> tuple[torch.device, str]:
+    """Return the device and the device type name autocast needs.
+
+    ``cpu`` / ``cuda[:i]`` map straight to ``torch.device``; anything else is a
+    FlagScale platform name (``mlu``, ``mlu:1``, ...) resolved through the platform
+    adapter, which also selects the card.
+    """
+
+    name, _, index = spec.partition(":")
+    if name in NATIVE_DEVICES:
+        device = torch.device(spec)
+        return device, device.type
+    if name == "mlu":
+        os.environ.setdefault("ENABLE_FALLBACK_TO_CPU", "0")  # read when the vendor runtime loads
+    os.environ["FS_PLATFORM"] = name
+    from flagscale.platforms import get_platform
+
+    platform = get_platform()
+    if platform.name() != name or not platform.is_available():
+        raise RuntimeError(f"platform {name!r} is not available on this host")
+    card = int(index) if index else 0
+    platform.set_device(card)
+    return platform.device(card), platform.amp_device_type()
+
+
+def synchronize(device: torch.device) -> None:
+    """Wait for the device's queued work, whichever runtime owns it."""
+
+    if device.type == "cpu":
+        return
+    runtime = getattr(torch, device.type, None)
+    if runtime is not None and hasattr(runtime, "synchronize"):
+        runtime.synchronize()
+    else:
+        torch.zeros(1, device=device).cpu()  # a D2H copy waits for the stream
+
+
+def autocast(device: torch.device, autocast_type: str, dtype: str):
+    if dtype == "fp32" or device.type == "cpu":
         return contextlib.nullcontext()
-    return torch.autocast(device_type="cuda", dtype=torch.bfloat16)
+    return torch.autocast(device_type=autocast_type, dtype=torch.bfloat16)
+
+
+def autocast_active(device: torch.device, autocast_type: str, dtype: str) -> bool:
+    """True when ``--dtype bf16`` really puts the forward pass under autocast.
+
+    PyTorch may accept an autocast request for a backend and quietly disable it, which
+    would time an fp32 pass under a bf16 label; that has to stop the run.
+    """
+
+    if dtype == "fp32" or device.type == "cpu":
+        return False
+    with autocast(device, autocast_type, dtype):
+        if not torch.is_autocast_enabled(autocast_type):
+            raise RuntimeError(f"bf16 autocast is not active on {device}; refusing to time an fp32 pass as bf16")
+    return True
 
 
 def to_device(batch: dict[str, torch.Tensor], device: torch.device) -> dict[str, torch.Tensor]:
@@ -93,7 +161,7 @@ def main() -> None:
     checkpoint = Path(args.checkpoint)
     state = torch.load(checkpoint / "model.pt", map_location="cpu")
     config = json.loads((checkpoint / "config.json").read_text())
-    device = torch.device(args.device)
+    device, autocast_type = resolve_device(args.device)
     model_cfg = OmegaConf.create(config["model"])
     meta = config["meta"]
 
@@ -117,16 +185,16 @@ def main() -> None:
             model.set_graph(data.graph["src"], data.graph["dst"], data.graph["weight"])
     model.load_state_dict(state)
     model.eval()
+    bf16_active = autocast_active(device, autocast_type, args.dtype)
 
     def sync() -> None:
-        if device.type == "cuda":
-            torch.cuda.synchronize()
+        synchronize(device)
 
     def one_pass() -> tuple[int, float, float]:
         """Return (rows, seconds, online seconds); online differs only for two_tower."""
         rows = 0
         online_started = None
-        with torch.no_grad(), autocast(device, args.dtype):
+        with torch.no_grad(), autocast(device, autocast_type, args.dtype):
             sync()
             started = time.perf_counter()
             if args.task == "two_tower":
@@ -173,7 +241,7 @@ def main() -> None:
 
     result = {
         "task": args.task, "model": str(model_cfg.model_type), "dataset": meta.get("name"),
-        "device": str(device), "dtype": args.dtype, "batch_size": args.batch_size,
+        "device": str(device), "dtype": args.dtype, "autocast_active": bf16_active, "batch_size": args.batch_size,
         "rows_per_pass": passes[0][0],
         "pass_seconds": [round(seconds, 4) for _, seconds, _ in passes],
         "rows_per_s_runs": [round(rate, 1) for rate in rates],
