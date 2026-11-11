@@ -173,7 +173,7 @@ LightGCN split (52,643 users / 91,599 items / 2,380,730 train / 603,378 test).
 | ads `dcn_mix` (BARS, node B, card 4) | 1 | AUC 0.8137 / logloss 0.4382 | — (no P800 BARS run) | BARS full-rank 0.8142 / 0.4378 | 108,385 | early stop @18, best epoch 16; `ads/results/dcn_mix_criteo_x1_mlu.md` |
 | rec `dssm` (ML-1M, node A) | 1 | Recall@100 0.2123 | — | 0.1474 (torch-rechub README) | 312,074 | exact full-catalogue ranking; the reference uses Annoy, so not strictly like-for-like |
 | rec `dssm` (ML-1M, node B, card 1) | 1 | hit@100 0.1599 / ndcg@100 0.0334 | — (no P800 run) | torch-rechub Hit@100 14.74% | 303,033 | 10 epochs; `rec/results/dssm_movielens_1m_mlu.md` |
-| rec `lightgcn_amazon_book` (node B, card 0) | 1 | running (epoch 430/1000) | — | paper recall@20 0.0410 / ndcg@20 0.0318 | ~8,300 | best recall@20 0.0412 at epochs 400/420, already at the paper level; ~4.8 min/epoch |
+| rec `lightgcn_amazon_book` (node B, card 0) | 1 | running (epoch 497/1000) | — | paper recall@20 0.0410 / ndcg@20 0.0318 | ~8,300 | best recall@20 0.0412 at epochs 400–480, already at the paper level; ~4.8 min/epoch |
 | rec `two_tower` (synthetic, node A) | 1 | neg_loss −0.6923 | — | none published | 7,045 | 100 steps; pipeline check only |
 
 Yelp2018 reproduction note: the two Yelp rows differ only in the reference's
