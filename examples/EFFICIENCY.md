@@ -56,20 +56,31 @@ SASRec loses 66 %.  The small batch-32 / 1-head models fall back to
 conversion-heavy paths, the large embedding+MLP model does not.  This is a
 property of the vendor kernel mix, not of the models.
 
-### Cambricon MLU590-M9 (2026-11-11)
+### Cambricon MLU590-M9 (2026-11-12)
 
-Same definition, `--device mlu:0`, **batch 1024** (aligned with the table above),
-SASRec ML-1M checkpoint:
+Same definition, `--device mlu:0`, batch 1024 for SASRec / LightGCN and 8192 for
+DSSM (aligned with the tables above; medians of the timed passes):
 
 | Model | Dataset | Rows per pass | FP32 s/pass | FP32 rows/s | BF16 s/pass | BF16 rows/s |
 | --- | --- | --- | --- | --- | --- | --- |
-| SASRec | MovieLens-1M test (6,040 users × 101 candidates) | 6,040 | 0.0295 | 204,784 | 0.0271 | **223,397** |
+| SASRec | MovieLens-1M test (6,040 users × 101 candidates) | 6,040 | 0.0298 | 202,731 | 0.0282 | **217,161** |
+| SASRec | Games test (30,901 users) | 30,901 | 0.1024 | 301,835 | 0.1169 | 264,298 |
+| SASRec | Beauty test (50,498 users) | 50,498 | 0.1645 | 307,047 | 0.1857 | 271,996 |
+| SASRec | Steam test (332,925 users) | 332,925 | 1.0905 | 305,305 | 1.2066 | 275,929 |
+| DSSM | MovieLens-1M test (full-catalogue retrieval) | 6,040 | 0.0062 | 975,888 | 0.0065 | 924,686 |
+| LightGCN | Gowalla test (full ranking) | 29,858 | 0.0121 | 2,457,798 | 0.0128 | 2,260,501 |
+| LightGCN | Yelp2018 test (full ranking) | 31,668 | 0.0152 | 2,086,298 | 0.0149 | 2,118,588 |
 
-`autocast_active=true` for the BF16 pass.  Here BF16 *helps* (unlike the P800
-SASRec row), so the vendor kernel mix matters more than the model shape.  The
-matching MLU training probe (BF16 numerically on par, ~8 % slower per epoch on
-this small model) and the exact commands are in
-[`CAMBRICON.md`](CAMBRICON.md#inference-throughput).
+`autocast_active=true` for every BF16 pass.  DSSM online-only (catalogue
+encoding excluded): FP32 1,432,879 / BF16 1,368,100 rows/s (medians).
+
+On MLU, BF16 inference loses on five of the seven rows (5–12 %) and only wins
+on ML-1M (+7.1 %) and Yelp2018 (+1.5 %); the node was shared during these
+measurements, so the sign of those two should be re-checked on an idle card.
+Unlike the P800 SASRec row (always slower under BF16), the MLU result is mixed,
+i.e. the vendor kernel mix — not the model shape — decides.  The matching MLU
+training results (SASRec 8–15 % slower per epoch, LightGCN unchanged) and the
+exact commands are in [`CAMBRICON.md`](CAMBRICON.md#bf16-batch-results-2026-11-1112).
 
 ## BF16 status
 
