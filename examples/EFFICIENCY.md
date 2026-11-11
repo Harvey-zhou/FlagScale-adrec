@@ -56,6 +56,20 @@ SASRec loses 66 %.  The small batch-32 / 1-head models fall back to
 conversion-heavy paths, the large embedding+MLP model does not.  This is a
 property of the vendor kernel mix, not of the models.
 
+### Cambricon MLU590-M9 (2026-11-11)
+
+Same definition, `--device mlu:0`, batch 8192, SASRec ML-1M checkpoint:
+
+| Model | Dataset | Rows per pass | FP32 s/pass | FP32 rows/s | BF16 s/pass | BF16 rows/s |
+| --- | --- | --- | --- | --- | --- | --- |
+| SASRec | MovieLens-1M test (6,040 users × 101 candidates) | 6,040 | 0.0243 | 249,935 | 0.0227 | **267,840** |
+
+`autocast_active=true` for the BF16 pass.  Here BF16 *helps* (unlike the P800
+SASRec row), so the vendor kernel mix matters more than the model shape.  The
+matching MLU training probe (BF16 numerically on par, ~8 % slower per epoch on
+this small model) and the exact commands are in
+[`CAMBRICON.md`](CAMBRICON.md#inference-throughput).
+
 ## BF16 status
 
 | Item | Status |
