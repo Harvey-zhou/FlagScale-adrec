@@ -169,6 +169,8 @@ LightGCN split (52,643 users / 91,599 items / 2,380,730 train / 603,378 test).
 | ads `din_paper_dice` (node B, card 7) | 1 | gAUC 0.8565 / AUC 0.8573 | gAUC 0.8575 / AUC 0.8587 | paper gAUC 0.8871 | 3,619 | 50 epochs, best epoch 5; no NaN (P800 diverged at epoch 38); `ads/results/din_paper_dice_amazonelectronics_x1_mlu.md` |
 | ads `din_paper` (node A, card 4) | 1 | running (epoch 1/50) | gAUC 0.8555 (P800) | paper gAUC 0.8818 | — | started 2026-11-11 |
 | ads `din` (BARS, node B, card 1) | 1 | gAUC 0.8821 / AUC 0.8847 | — (no P800 BARS run) | BARS gAUC 0.8835 / AUC 0.8860 | 60,828 | early stop @10, best epoch 8; `ads/results/din_amazonelectronics_x1_mlu.md` |
+| ads `deepfm` (BARS, node B, card 3) | 1 | AUC 0.8137 / logloss 0.4381 | — (no P800 BARS run) | BARS 0.8137 / 0.4381 | 95,699 | early stop @15, best epoch 13; card shared for epochs 8–13; `ads/results/deepfm_criteo_x1_mlu.md` |
+| ads `dcn_mix` (BARS, node B, card 4) | 1 | AUC 0.8137 / logloss 0.4382 | — (no P800 BARS run) | BARS full-rank 0.8142 / 0.4378 | 108,385 | early stop @18, best epoch 16; `ads/results/dcn_mix_criteo_x1_mlu.md` |
 | rec `dssm` (ML-1M, node A) | 1 | Recall@100 0.2123 | — | 0.1474 (torch-rechub README) | 312,074 | exact full-catalogue ranking; the reference uses Annoy, so not strictly like-for-like |
 | rec `dssm` (ML-1M, node B, card 1) | 1 | hit@100 0.1599 / ndcg@100 0.0334 | — (no P800 run) | torch-rechub Hit@100 14.74% | 303,033 | 10 epochs; `rec/results/dssm_movielens_1m_mlu.md` |
 | rec `lightgcn_amazon_book` (node B, card 0) | 1 | running (epoch 430/1000) | — | paper recall@20 0.0410 / ndcg@20 0.0318 | ~8,300 | best recall@20 0.0412 at epochs 400/420, already at the paper level; ~4.8 min/epoch |
