@@ -16,7 +16,7 @@ Games, Steam), 2-card CNCL DDP on ML-1M, and the full LightGCN Gowalla and
 Yelp2018 runs (paper and code settings).  Node B (2026-11-09 / 11-11): the same
 `ads` and `rec` smokes, full `ads` `deepfm_paper` / `dcn_mix_paper` /
 `din_paper_dice`, `rec` `sasrec_paper` / `dssm`, and the 1,000-epoch
-`lightgcn_amazon_book` run (in progress).  `ads din_paper` is running on node A.
+`lightgcn_amazon_book` run (in progress).  `ads din_paper` finished on node A (2026-11-11).
 Multi-node is still TODO.
 
 ## Two MLU nodes
@@ -27,7 +27,7 @@ repository.
 
 | Label | Role | MLU driver | Recorded in |
 | --- | --- | --- | --- |
-| node A | 2026-11-03..11 `ads` smokes, full `rec` runs (SASRec / DSSM / LightGCN), 2-card DDP, `ads din_paper` in progress | 6.5.52 | Cluster environment, Host inventory, operator probe and training results |
+| node A | 2026-11-03..11 `ads` smokes, full `rec` runs (SASRec / DSSM / LightGCN), 2-card DDP, `ads din_paper` | 6.5.52 | Cluster environment, Host inventory, operator probe and training results |
 | node B | 2026-11-09..11 `ads` + `rec` smokes, full `ads` runs, `rec` DSSM/SASRec, `lightgcn_amazon_book` in progress | 6.2.29 | Operator probe results, training results and the `*_mlu.md` run records |
 
 Both have the same CPU, RAM and card layout (2× Hygon C86 7390, 2 TiB RAM,
@@ -167,7 +167,7 @@ LightGCN split (52,643 users / 91,599 items / 2,380,730 train / 603,378 test).
 | ads `deepfm_paper` (node B, card 4) | 1 | AUC 0.8039 / logloss 0.4477 | AUC 0.8040 / logloss 0.4477 | BARS 0.8137 / 0.4381 | 56k–219k (shared card) | best epoch 1, early stop 6; `ads/results/deepfm_paper_criteo_x1_mlu.md` |
 | ads `dcn_mix_paper` (node B, card 6) | 1 | AUC 0.8104 / logloss 0.4411 | AUC 0.8104 / logloss 0.4411 | BARS 0.8142 / 0.4378 | 14,232 | 3 epochs, best epoch 3; `ads/results/dcn_mix_paper_criteo_x1_mlu.md` |
 | ads `din_paper_dice` (node B, card 7) | 1 | gAUC 0.8565 / AUC 0.8573 | gAUC 0.8575 / AUC 0.8587 | paper gAUC 0.8871 | 3,619 | 50 epochs, best epoch 5; no NaN (P800 diverged at epoch 38); `ads/results/din_paper_dice_amazonelectronics_x1_mlu.md` |
-| ads `din_paper` (node A, card 4) | 1 | running (epoch 1/50) | gAUC 0.8555 (P800) | paper gAUC 0.8818 | — | started 2026-11-11 |
+| ads `din_paper` (node A, card 4) | 1 | gAUC 0.8553 / AUC 0.8570 / logloss 0.4804 | gAUC 0.8555 (P800) | paper gAUC 0.8818 | ~5,100 | 50 epochs, 7 h 19 m; best epoch 5 |
 | rec `dssm` (ML-1M, node A) | 1 | Recall@100 0.2123 | — | 0.1474 (torch-rechub README) | 312,074 | exact full-catalogue ranking; the reference uses Annoy, so not strictly like-for-like |
 | rec `dssm` (ML-1M, node B, card 1) | 1 | hit@100 0.1599 / ndcg@100 0.0334 | — (no P800 run) | torch-rechub Hit@100 14.74% | 303,033 | 10 epochs; `rec/results/dssm_movielens_1m_mlu.md` |
 | rec `lightgcn_amazon_book` (node B, card 0) | 1 | running (epoch 430/1000) | — | paper recall@20 0.0410 / ndcg@20 0.0318 | ~8,300 | best recall@20 0.0412 at epochs 400/420, already at the paper level; ~4.8 min/epoch |
