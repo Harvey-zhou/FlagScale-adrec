@@ -109,7 +109,7 @@ below is the same config, seed and epoch budget as its FP32 counterpart.
 | SASRec / Amazon Games | HR@10 0.7340 / NDCG@10 0.5281 | 0.7324 / 0.5266 | −0.0016 | 6,433 | 12,635 |
 | SASRec / Steam | HR@10 0.8589 / NDCG@10 0.6150 | 0.8593 / 0.6152 | +0.0004 | 6,271 | 13,525 |
 | LightGCN / Gowalla (1,000 ep) | recall@20 0.1820 / ndcg 0.1553 | **0.1820 / 0.1553** | 0.0000 | 3,224 | 3,224 |
-| LightGCN / Yelp2018 (1,000 ep) | running | running | — | 4,216 | 4,214 |
+| LightGCN / Yelp2018 (1,000 ep, batch 2048) | recall@20 0.0576 / ndcg 0.0465 | **0.0576 / 0.0465** | 0.0000 | 4,208 | 4,207 |
 | Two-Tower (synthetic) | loss 0.6923 / train 0.4402 | identical | 0 | 984 | 1,006 |
 | DSSM / MovieLens-1M | Hit@100 0.1921 | 0.1990 | +0.0069 | 179,419 | 174,542 |
 | DSSM / MovieLens-20M | Hit@100 0.1647 | 0.1627 | −0.0020 | 183,777 | 179,481 |
