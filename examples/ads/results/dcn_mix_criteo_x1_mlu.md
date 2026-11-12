@@ -82,6 +82,35 @@ the backend itself does not move the number.  The paper-protocol run on the
 same split (`dcn_mix_paper`, 3 epochs) is 0.0033 AUC lower because it stops
 before the LR decay.
 
+## BF16
+
+Full run of the same config with `train.model.torch_dtype=bf16`
+(`2026-11-11 18:06:31 → 19:58:04`, card 4, 18 epochs, early stop at 18, best
+epoch 16).  Autocast only: weights and optimizer state stay fp32.  The run wrote
+to `out-bf16`, so the FP32 checkpoint and logs above are untouched.
+
+| Metric | FP32 (best epoch 16) | BF16 (best epoch 16) | Δ |
+| --- | --- | --- | --- |
+| test AUC | 0.813739 | 0.813678 | −0.000061 |
+| test logloss | 0.438238 | 0.438308 | +0.000070 |
+| epochs run | 18 | 18 | |
+| training time | 5,606.5 s | 6,604.4 s | +17.8 % |
+
+Accuracy is the same to 6e-5, so BF16 is accuracy-safe here too.  Throughput is
+worse, and this pair is clean (both runs had the card to themselves):
+
+| Quantity | FP32 | BF16 |
+| --- | --- | --- |
+| mean samples/s (all epochs) | 108,573 | **91,842 (−15.4 %)** |
+| median samples/s | 108,385 | 92,499 (−14.7 %) |
+| inference rows/s (batch 8192) | 972,714 | 744,244 (−23.5 %) |
+
+BF16 training is ~15 % slower and inference ~24 % slower on MLU, with
+`autocast_active=true`.  The controlled 1-epoch probes agree (86,505 vs 105,882
+samples/s training).  On the P800 the same DeepFM-family inference bench gains
+18 % in BF16; on these MLU kernels both phases lose.  Recorded as a property of
+the vendor kernel mix, not of the model.
+
 ## Notes
 
 * Throughput: **108,385 samples/s median** (105,512–111,858 over the 18

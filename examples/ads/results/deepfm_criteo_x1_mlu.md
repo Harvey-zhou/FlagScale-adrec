@@ -73,6 +73,39 @@ backend does not change the result.  The paper-protocol run on the same split
 (`deepfm_paper`) is 0.0098 AUC lower because it uses dropout 0.5, no BatchNorm
 and no embedding regularizer.
 
+## BF16
+
+Full run of the same config with `train.model.torch_dtype=bf16`
+(`2026-11-11 18:06:31 → 19:59:51`, card 3, 19 epochs, early stop at 19, best
+epoch 17).  This is autocast — the weights and the optimizer state stay fp32 —
+and the run wrote to a separate `ADREC_OUT_ROOT` (`out-bf16`), so the FP32
+checkpoint, logs and metrics above are untouched.
+
+| Metric | FP32 (best epoch 13) | BF16 (best epoch 17) | Δ |
+| --- | --- | --- | --- |
+| test AUC | 0.813723 | 0.813804 | +0.000081 |
+| test logloss | 0.438119 | 0.438037 | −0.000082 |
+| epochs run | 15 | 19 | |
+| training time | 7,690.5 s | 6,750.4 s | |
+
+Accuracy is the same to 1e-4 AUC / 1e-4 logloss, so BF16 is accuracy-safe on
+this model.  Throughput, however, is **not better**:
+
+| Quantity | FP32 | BF16 |
+| --- | --- | --- |
+| mean samples/s (all epochs) | 76,538 | **94,631** |
+| median samples/s | 95,699 | 95,062 |
+| inference rows/s (batch 8192) | 1,032,959 | 781,934 (−24.3 %) |
+
+The two means are not directly comparable: the FP32 run shared card 3 with
+another job during epochs 8–13 and its mean is pulled down (see the note below),
+while the BF16 run had the card to itself.  On the median the two training
+rates are equal, and the controlled 1-epoch probes (same idle card, one after
+the other) put BF16 at 87,758 vs 99,295 samples/s, i.e. **~12 % slower**.  BF16
+inference is ~24 % slower on MLU with `autocast_active=true`.  This is the
+opposite direction from the P800, where the same DeepFM inference bench gains
+18 % in BF16 — a property of the vendor kernel mix, not of the model.
+
 ## Notes
 
 * Throughput: **95,699 samples/s median** (42,161–103,058 over the 15 epochs).

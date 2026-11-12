@@ -58,29 +58,59 @@ property of the vendor kernel mix, not of the models.
 
 ### Cambricon MLU590-M9 (2026-11-11)
 
-Same definition, `--device mlu:0`, batch 8192, SASRec ML-1M checkpoint:
+Node B (driver 6.2.29), fp32 unless marked BF16, single card per run; the
+2-card LightGCN row uses two cards.  Training throughput is the same
+`history.json` mean as above:
+
+| Run | Config | Batch | Epochs | Mean samples/s | Median | Train time |
+| --- | --- | --- | --- | --- | --- | --- |
+| DIN / Amazon Electronics | `din` (BARS) | 1024 | 10 | **60,805** | 60,828 | 9 min 32 s |
+| DIN / Amazon, released + Dice | `din_dice_author` | 32 | 10 | **3,584** | 3,632 | 2 h 03 m 33 s |
+| DeepFM / Criteo_x1 | `deepfm` (BARS) | 4096 | 15 | 76,538 | **95,699** | 2 h 08 m 11 s |
+| DeepFM / Criteo_x1 | `deepfm` (BARS, BF16) | 4096 | 19 | 94,631 | 95,062 | 1 h 52 m 30 s |
+| DCN-Mix / Criteo_x1 | `dcn_mix` (BARS) | 4096 | 18 | **108,573** | 108,385 | 1 h 33 m 27 s |
+| DCN-Mix / Criteo_x1 | `dcn_mix` (BARS, BF16) | 4096 | 18 | 91,842 | 92,499 | 1 h 50 m 04 s |
+| LightGCN / Gowalla, 2 cards | `lightgcn` (code) | 1024/rank | 1000 | **35,730** | 35,770 | 6 h 29 m 32 s |
+
+The DeepFM FP32 mean is pulled down by epochs 8–13, which shared the card with
+another job (42–47 k vs ~103 k samples/s); its median is the fair number, and
+it equals the BF16 median.  The controlled 1-epoch probes put BF16 at
+87,758 (DeepFM) and 86,505 (DCN-Mix) samples/s vs 99,295 and 105,882 for FP32 —
+i.e. BF16 training is 12–18 % slower.  The DCN-Mix full-run pair is clean and
+confirms it (−15 %).  The 2-card LightGCN row is the first CNCL DDP run on node
+B; node A's 2-card paper-protocol row (63,700) uses half the per-rank batch and
+`index_add` instead of the default `sparse` propagation.
+
+Inference, same definition, `--device mlu:0`, batch 8192:
 
 | Model | Dataset | Rows per pass | FP32 s/pass | FP32 rows/s | BF16 s/pass | BF16 rows/s |
 | --- | --- | --- | --- | --- | --- | --- |
+| DeepFM | Criteo_x1 test (4,587,167) | 4,587,167 | 4.44 | **1,032,959** | 5.87 | 781,934 (−24.3 %) |
+| DCN-Mix | Criteo_x1 test (4,587,167) | 4,587,167 | 4.72 | **972,714** | 6.17 | 744,244 (−23.5 %) |
 | SASRec | MovieLens-1M test (6,040 users × 101 candidates) | 6,040 | 0.0243 | 249,935 | 0.0227 | **267,840** |
 
-`autocast_active=true` for the BF16 pass.  Here BF16 *helps* (unlike the P800
-SASRec row), so the vendor kernel mix matters more than the model shape.  The
-matching MLU training probe (BF16 numerically on par, ~8 % slower per epoch on
-this small model) and the exact commands are in
+`autocast_active=true` for every BF16 pass.  BF16 helps SASRec and hurts both
+ads models on these kernels; on the P800 the same DeepFM bench gains 18 % in
+BF16, so the vendor kernel mix moves the sign.  The matching MLU training
+numbers and the exact commands are in
 [`CAMBRICON.md`](CAMBRICON.md#inference-throughput).
 
 ## BF16 status
 
 | Item | Status |
 | --- | --- |
-| Inference autocast | works (`--dtype bf16`), 30–66 % slower |
+| Inference autocast | works (`--dtype bf16`) on P800 and MLU; 30–66 % slower on P800, and 24 % slower on MLU for DeepFM/DCN-Mix (SASRec is 7 % faster on MLU) |
 | Training autocast | works; one full epoch of the 2.6 M rows at batch 32: **3,243 samples/s** (804 s), epoch-1 gAUC 0.8230 vs 0.8245 for FP32 — numerically indistinguishable |
-| BF16 vs FP32 training | BF16 looks ~12–18 % faster at batch 32, but the FP32 reference is a 50-epoch mean under heavy contention (1,069–3,314 samples/s spread); a controlled same-load pair has not been run |
+| BF16 vs FP32 training, P800 | BF16 looks ~12–18 % faster at batch 32, but the FP32 reference is a 50-epoch mean under heavy contention (1,069–3,314 samples/s spread); a controlled same-load pair has not been run |
+| BF16 vs FP32 training, MLU | controlled same-card pairs: **12–18 % slower** (DeepFM 87,758 vs 99,295; DCN-Mix 86,505 vs 105,882 samples/s) |
 
-BF16 training is therefore usable on this stack, while BF16 *inference* is
-slower — the opposite direction, and both are properties of the vendor kernels
-rather than of the models.
+Two full MLU runs settle the accuracy question: DeepFM ends at AUC 0.813804 /
+logloss 0.438037 vs 0.813723 / 0.438119 in FP32, and DCN-Mix at 0.813678 /
+0.438308 vs 0.813739 / 0.438238 — every delta below 1e-4.  BF16 is
+accuracy-safe for these models on this stack.  Speed is a different story:
+BF16 training and inference are both slower on MLU (the DeepFM/DCN-Mix pair),
+while P800 DeepFM inference gains 18 %.  The direction is set by the vendor
+kernel mix, not by the model.
 
 ## Reproduction
 

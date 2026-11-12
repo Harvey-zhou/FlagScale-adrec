@@ -15,8 +15,10 @@ are in use (see "Two MLU nodes" below).  Node A (2026-11-03 / 11-06 / 11-07 /
 Games, Steam), 2-card CNCL DDP on ML-1M, and the full LightGCN Gowalla and
 Yelp2018 runs (paper and code settings).  Node B (2026-11-09 / 11-11): the same
 `ads` and `rec` smokes, full `ads` `deepfm_paper` / `dcn_mix_paper` /
-`din_paper_dice`, `rec` `sasrec_paper` / `dssm`, and the 1,000-epoch
-`lightgcn_amazon_book` run (in progress).  `ads din_paper` is running on node A.
+`din_paper_dice` / `din_dice_author` and the three BARS `ads` runs (DeepFM and
+DCN-Mix also in BF16), `rec` `sasrec_paper` / `dssm` / 2-card code-settings
+`lightgcn` on Gowalla, and the 1,000-epoch `lightgcn_amazon_book` run (in
+progress).  `ads din_paper` is running on node A.
 Multi-node is still TODO.
 
 ## Two MLU nodes
@@ -28,7 +30,7 @@ repository.
 | Label | Role | MLU driver | Recorded in |
 | --- | --- | --- | --- |
 | node A | 2026-11-03..11 `ads` smokes, full `rec` runs (SASRec / DSSM / LightGCN), 2-card DDP, `ads din_paper` in progress | 6.5.52 | Cluster environment, Host inventory, operator probe and training results |
-| node B | 2026-11-09..11 `ads` + `rec` smokes, full `ads` runs, `rec` DSSM/SASRec, `lightgcn_amazon_book` in progress | 6.2.29 | Operator probe results, training results and the `*_mlu.md` run records |
+| node B | 2026-11-09..11 `ads` + `rec` smokes, full `ads` runs (BARS + paper, BF16 pair), `rec` DSSM / SASRec / code-settings LightGCN, `lightgcn_amazon_book` in progress | 6.2.29 | Operator probe results, training results and the `*_mlu.md` run records |
 
 Both have the same CPU, RAM and card layout (2× Hygon C86 7390, 2 TiB RAM,
 8× MLU590-M9); the MLU driver is what tells them apart.
@@ -162,18 +164,22 @@ LightGCN split (52,643 users / 91,599 items / 2,380,730 train / 603,378 test).
 | rec `sasrec_games_paper` (node A) | 1 | HR@10 0.7266 / NDCG@10 0.5222 | 0.7340 / 0.5281 (914 s) | 0.7410 / 0.5360 (paper) | 9,305 | early stop @133; 409 s |
 | rec `sasrec_steam_paper` (node A) | 1 | HR@10 0.8614 / NDCG@10 0.6167 | 0.8589 / 0.6150 (4,702 s) | 0.8729 / 0.6306 (paper) | 10,672 | early stop @108; 3,416 s |
 | rec `lightgcn_paper` (Gowalla, 2-card DDP, node A) | 2 | recall@20 0.1820 / ndcg@20 0.1550 | 0.1820 / 0.1553 (70 h, 1 card) | 0.1823 / 0.1555 (paper) | 63,700 | 1,000 epochs, 3 h 43 m; batch 512/rank (global 1024); `index_add`; the 1200 MHz seen on idle cards is an idle state — the cards ran at 1600 MHz during the run (sampled 2026-11-09), so this is a full-clock number |
+| rec `lightgcn` (Gowalla, code settings, 2-card DDP, node B) | 2 | recall@20 0.1818 / ndcg@20 0.1553 | — (no P800 code run; the P800 paper run is 0.1820 / 0.1553) | 0.1824 / 0.1547 (released code); paper 0.1823 / 0.1555 | 35,730 | 1,000 epochs, 6 h 29 m; batch 1024/rank (global 2048); `sparse` propagation; first CNCL DDP on node B; `rec/results/lightgcn_gowalla_mlu.md` |
 | rec `lightgcn_yelp2018_paper` (paper settings, node A) | 2 | recall@20 0.0569 / ndcg@20 0.0462 | — (the P800 Yelp run did not finish) | 0.0639 / 0.0525 (paper) | 45,645 | 1,000 epochs, 7 h 58 m; the gap is the paper-vs-code settings difference, see the next row |
 | rec `lightgcn_yelp2018_paper` (code settings, node A) | 2 | recall@20 0.0632 / ndcg@20 0.0522 | — | 0.06347 / 0.05238 (authors' code) | 89,619 | 1,000 epochs, 4 h 49 m; reproduces the reference to 0.0003; the Yelp data files are md5-identical to the authors' |
 | ads `deepfm_paper` (node B, card 4) | 1 | AUC 0.8039 / logloss 0.4477 | AUC 0.8040 / logloss 0.4477 | BARS 0.8137 / 0.4381 | 56k–219k (shared card) | best epoch 1, early stop 6; `ads/results/deepfm_paper_criteo_x1_mlu.md` |
 | ads `dcn_mix_paper` (node B, card 6) | 1 | AUC 0.8104 / logloss 0.4411 | AUC 0.8104 / logloss 0.4411 | BARS 0.8142 / 0.4378 | 14,232 | 3 epochs, best epoch 3; `ads/results/dcn_mix_paper_criteo_x1_mlu.md` |
 | ads `din_paper_dice` (node B, card 7) | 1 | gAUC 0.8565 / AUC 0.8573 | gAUC 0.8575 / AUC 0.8587 | paper gAUC 0.8871 | 3,619 | 50 epochs, best epoch 5; no NaN (P800 diverged at epoch 38); `ads/results/din_paper_dice_amazonelectronics_x1_mlu.md` |
+| ads `din_dice_author` (node B, card 5) | 1 | gAUC 0.8689 / AUC 0.8714 | gAUC 0.8658 / AUC 0.8681 | paper gAUC 0.8871 (authors' 0.8711) | 3,584 | 10 epochs, best epoch 3; no NaN (P800 diverged at epoch 3); `ads/results/din_dice_author_amazonelectronics_x1_mlu.md` |
 | ads `din_paper` (node A, card 4) | 1 | running (epoch 1/50) | gAUC 0.8555 (P800) | paper gAUC 0.8818 | — | started 2026-11-11 |
 | ads `din` (BARS, node B, card 1) | 1 | gAUC 0.8821 / AUC 0.8847 | — (no P800 BARS run) | BARS gAUC 0.8835 / AUC 0.8860 | 60,828 | early stop @10, best epoch 8; `ads/results/din_amazonelectronics_x1_mlu.md` |
 | ads `deepfm` (BARS, node B, card 3) | 1 | AUC 0.8137 / logloss 0.4381 | — (no P800 BARS run) | BARS 0.8137 / 0.4381 | 95,699 | early stop @15, best epoch 13; card shared for epochs 8–13; `ads/results/deepfm_criteo_x1_mlu.md` |
+| ads `deepfm` (BARS, **BF16**, node B, card 3) | 1 | AUC 0.8138 / logloss 0.4380 | — | BARS 0.8137 / 0.4381 (FP32 same config 0.813723 / 0.438119) | 94,631 | 19 epochs, best 17; accuracy delta <1e-4; training ~12 % slower, inference −24 %; `ads/results/deepfm_criteo_x1_mlu.md#bf16` |
 | ads `dcn_mix` (BARS, node B, card 4) | 1 | AUC 0.8137 / logloss 0.4382 | — (no P800 BARS run) | BARS full-rank 0.8142 / 0.4378 | 108,385 | early stop @18, best epoch 16; `ads/results/dcn_mix_criteo_x1_mlu.md` |
+| ads `dcn_mix` (BARS, **BF16**, node B, card 4) | 1 | AUC 0.8137 / logloss 0.4383 | — | BARS full-rank 0.8142 / 0.4378 (FP32 same config 0.813739 / 0.438238) | 91,842 | 18 epochs, best 16; accuracy delta <1e-4; training −15 %, inference −24 %; `ads/results/dcn_mix_criteo_x1_mlu.md#bf16` |
 | rec `dssm` (ML-1M, node A) | 1 | Recall@100 0.2123 | — | 0.1474 (torch-rechub README) | 312,074 | exact full-catalogue ranking; the reference uses Annoy, so not strictly like-for-like |
 | rec `dssm` (ML-1M, node B, card 1) | 1 | hit@100 0.1599 / ndcg@100 0.0334 | — (no P800 run) | torch-rechub Hit@100 14.74% | 303,033 | 10 epochs; `rec/results/dssm_movielens_1m_mlu.md` |
-| rec `lightgcn_amazon_book` (node B, card 0) | 1 | running (epoch 497/1000) | — | paper recall@20 0.0410 / ndcg@20 0.0318 | ~8,300 | best recall@20 0.0412 at epochs 400–480, already at the paper level; ~4.8 min/epoch |
+| rec `lightgcn_amazon_book` (node B, card 0) | 1 | running (epoch 747/1000) | — | paper recall@20 0.0410 / ndcg@20 0.0318 | ~8,300 | best recall@20 0.0415 at epoch 740, already above the paper level; ~4.8 min/epoch |
 | rec `two_tower` (synthetic, node A) | 1 | neg_loss −0.6923 | — | none published | 7,045 | 100 steps; pipeline check only |
 
 Yelp2018 reproduction note: the two Yelp rows differ only in the reference's
@@ -247,12 +253,36 @@ Reading: BF16 inference is ~7 % faster on this model.  BF16 training is
 numerically indistinguishable (NDCG identical, HR@10 −0.18 %) but ~8 % slower
 per epoch — a 212 k-parameter model is too small for the conversion overhead to
 pay off, and it finishes earlier only because it early-stops at epoch 146
-instead of 163.  Batch BF16 where the model is compute-bound (ads models,
-LightGCN), not for SASRec throughput.
+instead of 163.
+
+### Ads BF16 pair (2026-11-11, node B, cards 3 / 4)
+
+The two BARS ads configs were run end-to-end in FP32 and BF16 on the same node
+and the same commit, with the BF16 runs in a separate `ADREC_OUT_ROOT`:
+
+| Model | dtype | Epochs (best) | Mean samples/s | Median | Test AUC | Test logloss | Train time |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| DeepFM | fp32 | 15 (13) | 76,538* | 95,699 | 0.813723 | 0.438119 | 7,690.5 s |
+| DeepFM | bf16 | 19 (17) | 94,631 | 95,062 | 0.813804 | 0.438037 | 6,750.4 s |
+| DCN-Mix | fp32 | 18 (16) | 108,573 | 108,385 | 0.813739 | 0.438238 | 5,606.5 s |
+| DCN-Mix | bf16 | 18 (16) | 91,842 | 92,499 | 0.813678 | 0.438308 | 6,604.4 s |
+
+\* The DeepFM FP32 mean includes epochs 8–13 on a shared card (42–47 k vs
+~103 k samples/s); its median is the fair number.  The DCN-Mix pair is clean.
+Controlled 1-epoch probes on an idle card agree with the clean pair: DeepFM
+87,758 (BF16) vs 99,295 (FP32), DCN-Mix 86,505 vs 105,882 samples/s.
+
+Accuracy: every delta is below 1e-4 AUC / 1e-4 logloss, so BF16 is safe for
+these models.  Speed: BF16 training is 12–18 % slower; BF16 inference on the
+same checkpoints (`--task ads`, batch 8192, card 1) is also slower —
+DeepFM 1,032,959 → 781,934 rows/s (−24.3 %), DCN-Mix 972,714 → 744,244
+(−23.5 %), `autocast_active=true`.  On the P800 DeepFM *gains* 18 % in BF16
+inference, so the sign is set by the vendor kernel mix, not the model.
 
 Probe checkpoint: `<ADREC_OUT_ROOT>/rec/ckpts/sasrec_paper-mlu` under a separate
 `ADREC_OUT_ROOT` (removed after recording); the figures above are from its
-`metrics.json` / `history.json` and the two bench JSON lines.
+`metrics.json` / `history.json` and the two bench JSON lines.  The ads BF16
+checkpoints stay in `/home/zhouhao/flagos-adrec-cambricon/out-bf16/`.
 
 ## How the launcher keeps a run honest
 
