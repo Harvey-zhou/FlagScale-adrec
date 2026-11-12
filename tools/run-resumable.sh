@@ -47,7 +47,9 @@ while [ "$attempt" -lt 40 ]; do
   done
   sleep 5
 
-  FLAGSCALE_RESUME=$resume bash examples/run-adrec-kunlunxin.sh "$module" "$config" "$card" "$@" \
+  # own session/process group: a killed attempt can then be cleaned up whole,
+  # including the preflight heredoc that would otherwise keep a device context
+  setsid bash examples/run-adrec-kunlunxin.sh "$module" "$config" "$card" "$@" \
     >> "$out/launch.log" 2>&1 &
   launcher=$!
   history=$(find "$out" -name history.json -print -quit 2>/dev/null)
@@ -73,7 +75,7 @@ while [ "$attempt" -lt 40 ]; do
       [ "$mark" -gt "$last_mark" ] && last_mark=$mark
       if [ $(( $(date +%s) - last_mark )) -gt "$STALL_S" ]; then
         echo "===== $name: no epoch for ${STALL_S}s (stuck in preflight or hung), killing attempt $attempt ====="
-        pkill -9 -P "$launcher" 2>/dev/null
+        kill -9 -"$launcher" 2>/dev/null
         kill -9 "$launcher" 2>/dev/null
         for pattern in "train_rec.py --config-file=$out" "train_ads.py --config-file=$out"; do
           pgrep -f "$pattern" 2>/dev/null | while read -r pid; do kill -9 "$pid" 2>/dev/null; done
@@ -82,13 +84,17 @@ while [ "$attempt" -lt 40 ]; do
       fi
     elif [ $(( $(date +%s) - started_at )) -gt "$STALL_S" ]; then
       echo "===== $name: no history after ${STALL_S}s, killing attempt $attempt ====="
-      pkill -9 -P "$launcher" 2>/dev/null
+      kill -9 -"$launcher" 2>/dev/null
       kill -9 "$launcher" 2>/dev/null
       break
     fi
   done
   wait "$launcher" 2>/dev/null
-  sleep 60
+  # the device can be down for hours: back off instead of hammering it with a
+  # stuck preflight every 60 s
+  backoff=$(( 60 * (attempt < 10 ? attempt : 10) ))
+  echo "===== $name: attempt $attempt failed, retrying in ${backoff}s ====="
+  sleep "$backoff"
 done
 echo "===== $name: gave up after $attempt attempts ====="
 exit 1
