@@ -49,7 +49,7 @@ while [ "$attempt" -lt 40 ]; do
 
   # own session/process group: a killed attempt can then be cleaned up whole,
   # including the preflight heredoc that would otherwise keep a device context
-  setsid bash examples/run-adrec-kunlunxin.sh "$module" "$config" "$card" "$@" \
+  FLAGSCALE_RESUME=$resume setsid bash examples/run-adrec-kunlunxin.sh "$module" "$config" "$card" "$@" \
     >> "$out/launch.log" 2>&1 &
   launcher=$!
   history=$(find "$out" -name history.json -print -quit 2>/dev/null)
