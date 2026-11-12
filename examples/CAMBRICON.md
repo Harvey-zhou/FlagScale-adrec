@@ -226,7 +226,7 @@ reference table uses), one warm-up plus three timed passes:
 | dtype | autocast_active | s/pass | rows/s (mean) | rows/s (median) |
 | --- | --- | --- | --- | --- |
 | fp32 | false | 0.0287 / 0.0297 / 0.0301 | 204,784 | 203,379 |
-| bf16 | **true** | 0.0276 / 0.0268 / 0.0268 | **223,397 (+9.1 %)** | 225,399 (+10.8 %) |
+| bf16 | **true** | 0.0276 / 0.0268 / 0.0268 | 223,397 (+9.1 %) | 225,399 (+10.8 %) |
 
 The first probe used batch 8192 (249,935 / 267,840 rows/s); it is not comparable
 with the P800 table's batch-1024 SASRec row, so the numbers above are the aligned
@@ -244,12 +244,15 @@ Training probe, `sasrec_paper` with `train.model.torch_dtype=bf16` (one card,
 For training the context was verified independently: a matmul inside
 `autocast_context(device, "bf16", platform_mlu)` returns `torch.bfloat16`.
 
-Reading: BF16 inference is ~9 % faster on this model (mean; ~11 % median).  BF16
-training is numerically indistinguishable (NDCG identical, HR@10 −0.18 %) but
-~8 % slower per epoch — a 212 k-parameter model is too small for the conversion
-overhead to pay off, and it finishes earlier only because it early-stops at
-epoch 146 instead of 163.  Batch BF16 where the model is compute-bound (ads
-models, LightGCN), not for SASRec throughput.
+Reading: this single probe put BF16 inference ~9 % faster (mean; ~11 % median),
+but it did not reproduce.  Three later runs on the same checkpoint gave medians
+of 117,134 / 217,161 / 225,274 rows/s while FP32 stayed at 192k–211k (batch
+table below), so ML-1M is not a BF16 speedup.  BF16 training is numerically
+indistinguishable (NDCG identical, HR@10 −0.18 %) but ~8 % slower per epoch — a
+212 k-parameter model is too small for the conversion overhead to pay off, and
+it finishes earlier only because it early-stops at epoch 146 instead of 163.
+Batch BF16 only where the model is compute-bound (the large ads models); it is
+neutral on LightGCN and loses on SASRec.
 
 Probe checkpoint: `<ADREC_OUT_ROOT>/rec/ckpts/sasrec_paper-mlu` under a separate
 `ADREC_OUT_ROOT` (removed after recording); the figures above are from its
@@ -270,6 +273,7 @@ isolate the inference dtype.  All runs were on node A.
 | SASRec Games | 0.72661 / 0.52219 | 0.73376 / 0.52927 | 133 → 215 | 2.918 → 3.334 |
 | SASRec Beauty | 0.46843 / 0.30915 | 0.46014 / 0.29959 | 381 → 195 | 5.108 → 5.184 |
 | SASRec Steam | 0.86143 / 0.61669 | 0.86164 / 0.61690 | 108 → 108 | 29.911 → 33.263 |
+| DSSM ML-1M | recall@100 0.21225 / ndcg 0.04618 | 0.19288 / 0.04477 | 10 → 10 | 13.17 → 14.01 |
 | LightGCN Gowalla | recall@20 0.18197 / ndcg 0.15503 | 0.18197 / 0.15503 | 1000 → 1000 | 12.718 → 12.737 |
 | LightGCN Yelp2018 (code) | 0.06324 / 0.05217 | 0.06381 / 0.05265 | 1000 → 1000 | 15.81 → 27.52 * |
 
@@ -283,6 +287,11 @@ precision (Steam, the only pair that stops at the same epoch, differs by
 LightGCN is unaffected: identical metrics on Gowalla and identical
 back-to-back single-card throughput.
 
+DSSM is the one pair with the same epoch budget and a visible metric drop
+(recall@100 −0.0194, −9.1 %).  It is a single run, so it could be seed variance
+rather than precision; repeat before quoting it.  Its throughput is also flat
+(13.17 → 14.01 s/epoch).
+
 ### LightGCN single-card throughput (30 epochs, config batch, card 4)
 
 | Run | batch | FP32 samples/s | BF16 samples/s |
@@ -294,31 +303,36 @@ FP32 and BF16 are the same within 0.1 %: embedding lookups and `index_add` are
 not autocast kernels, and the parameters stay FP32, so BF16 neither speeds up
 nor shrinks LightGCN training.
 
-### Inference (medians; batch 1024 for SASRec / LightGCN, 8192 for DSSM)
+### Inference (medians; batch 1024 for SASRec / LightGCN, 8192 for DSSM and DIN)
 
 | Model | Dataset | FP32 rows/s | BF16 rows/s | change |
 | --- | --- | --- | --- | --- |
-| SASRec | ML-1M | 202,731 | 217,161 | +7.1 % |
+| SASRec | ML-1M | 202,731 | 117,134–225,274 | unstable |
 | SASRec | Games | 301,835 | 264,298 | −12.4 % |
 | SASRec | Beauty | 307,047 | 271,996 | −11.4 % |
 | SASRec | Steam | 305,305 | 275,929 | −9.6 % |
 | DSSM | ML-1M (full catalogue) | 975,888 | 924,686 | −5.2 % |
+| DIN | AmazonElectronics (384,806 rows) | 670,636 | 660,652 | −1.5 % |
 | LightGCN | Gowalla | 2,457,798 | 2,260,501 | −8.0 % |
 | LightGCN | Yelp2018 | 2,086,298 | 2,118,588 | +1.5 % |
 
 DSSM online-only throughput (catalogue encoding excluded): FP32 1,432,879 /
 BF16 1,368,100 rows/s (medians).
 
-BF16 inference is slower on five of the seven rows (5–12 %).  ML-1M and Yelp2018
-are the exceptions; the node was shared for all measurements, so repeat before
-treating the sign of those two as firm.
+BF16 inference is slower on six of the eight rows (5–12 %).  ML-1M is the one
+place where BF16 looked faster, and it does not reproduce: four runs gave
+medians 117,134 / 217,161 / 225,274 rows/s while FP32 stayed at 192k–211k, i.e.
+the BF16 result swings by 2× and its sign is not a result.  Yelp2018 (+1.5 %)
+is within run-to-run noise on a shared node.  DIN, the only ads model measured
+so far, is neutral (−1.5 %).
 
 ### What to use BF16 for
 
 Not a throughput win on this stack for SASRec (training 8–15 % slower, inference
 mixed) or LightGCN (training identical, inference slower).  Keep FP32 for these
-models; evaluate BF16 only for the large ads models, where the vendor matmul
-path is compute-bound (node B's DeepFM/DIN numbers are the place to look).
+models.  The large ads models are the remaining candidates: DIN inference is
+already neutral (−1.5 %), and its BF16 training run is in progress; DeepFM and
+DCN-Mix still need node B's FP32 checkpoints.
 
 ## How the launcher keeps a run honest
 
