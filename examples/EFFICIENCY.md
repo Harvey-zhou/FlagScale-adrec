@@ -56,11 +56,12 @@ SASRec loses 66 %.  The small batch-32 / 1-head models fall back to
 conversion-heavy paths, the large embedding+MLP model does not.  This is a
 property of the vendor kernel mix, not of the models.
 
-### Cambricon MLU590-M9 (2026-11-11)
+### Cambricon MLU590-M9 (2026-11-12)
 
-Node B (driver 6.2.29), fp32 unless marked BF16, single card per run; the
-2-card LightGCN row uses two cards.  Training throughput is the same
-`history.json` mean as above:
+Nodes A and B (drivers 6.5.52 / 6.2.29), fp32 unless marked BF16, single card
+per run; the 2-card LightGCN row uses two cards.  The training table is node B;
+the inference table mixes both nodes, and its DeepFM / DCN-Mix rows are node B.
+Training throughput is the same `history.json` mean as above:
 
 | Run | Config | Batch | Epochs | Mean samples/s | Median | Train time |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -81,36 +82,55 @@ confirms it (−15 %).  The 2-card LightGCN row is the first CNCL DDP run on nod
 B; node A's 2-card paper-protocol row (63,700) uses half the per-rank batch and
 `index_add` instead of the default `sparse` propagation.
 
-Inference, same definition, `--device mlu:0`, batch 8192:
+Inference, same definition, `--device mlu:0`, batch 1024 for SASRec / LightGCN
+and 8192 for DSSM / ads (aligned with the tables above; medians of the timed
+passes):
 
 | Model | Dataset | Rows per pass | FP32 s/pass | FP32 rows/s | BF16 s/pass | BF16 rows/s |
 | --- | --- | --- | --- | --- | --- | --- |
-| DeepFM | Criteo_x1 test (4,587,167) | 4,587,167 | 4.44 | **1,032,959** | 5.87 | 781,934 (−24.3 %) |
-| DCN-Mix | Criteo_x1 test (4,587,167) | 4,587,167 | 4.72 | **972,714** | 6.17 | 744,244 (−23.5 %) |
-| SASRec | MovieLens-1M test (6,040 users × 101 candidates) | 6,040 | 0.0243 | 249,935 | 0.0227 | **267,840** |
+| SASRec | MovieLens-1M test (6,040 users × 101 candidates) | 6,040 | 0.0298 | 202,731 | 0.0259–0.0516 | 117,134–225,274 (unstable) |
+| SASRec | Games test (30,901 users) | 30,901 | 0.1024 | 301,835 | 0.1169 | 264,298 |
+| SASRec | Beauty test (50,498 users) | 50,498 | 0.1645 | 307,047 | 0.1857 | 271,996 |
+| SASRec | Steam test (332,925 users) | 332,925 | 1.0905 | 305,305 | 1.2066 | 275,929 |
+| DSSM | MovieLens-1M test (full-catalogue retrieval) | 6,040 | 0.0062 | 975,888 | 0.0065 | 924,686 |
+| DIN | AmazonElectronics test (384,806 rows) | 384,806 | 0.5738 | 670,636 | 0.5825 | 660,652 |
+| DeepFM | Criteo_x1 test (4,587,167) | 4,587,167 | 4.4464 | 1,031,653 | 5.8512 | 783,970 |
+| DCN-Mix | Criteo_x1 test (4,587,167) | 4,587,167 | 4.7059 | 974,769 | 6.1301 | 748,296 |
+| LightGCN | Gowalla test (full ranking) | 29,858 | 0.0121 | 2,457,798 | 0.0128 | 2,260,501 |
+| LightGCN | Yelp2018 test (full ranking) | 31,668 | 0.0152 | 2,086,298 | 0.0149 | 2,118,588 |
 
-`autocast_active=true` for every BF16 pass.  BF16 helps SASRec and hurts both
-ads models on these kernels; on the P800 the same DeepFM bench gains 18 % in
-BF16, so the vendor kernel mix moves the sign.  The matching MLU training
-numbers and the exact commands are in
-[`CAMBRICON.md`](CAMBRICON.md#inference-throughput).
+`autocast_active=true` for every BF16 pass.  DSSM online-only (catalogue
+encoding excluded): FP32 1,432,879 / BF16 1,368,100 rows/s (medians).
+
+On MLU, BF16 inference loses on seven of the ten rows (5–24 %); DIN is neutral
+(−1.5 %) and Yelp2018 (+1.5 %) is within noise.  The MovieLens-1M row is the
+exception that does not hold up: four runs gave BF16 medians of 117,134 /
+217,161 / 225,274 rows/s against a stable FP32 192k–211k, so it is recorded as
+a range rather than a speedup.  Unlike the P800 SASRec row (always slower under
+BF16), the MLU result is mixed, i.e. the vendor kernel mix — not the model shape
+— decides.  On the P800 the same DeepFM bench *gains* 18 % in BF16, so the sign
+is not even stable across backends.  The matching MLU training results (SASRec
+8–15 % slower per epoch, DSSM flat with a lower metric, LightGCN unchanged, ads
+12–18 % slower) and the exact commands are in
+[`CAMBRICON.md`](CAMBRICON.md#bf16-batch-results-2026-11-1112).
 
 ## BF16 status
 
 | Item | Status |
 | --- | --- |
-| Inference autocast | works (`--dtype bf16`) on P800 and MLU; 30–66 % slower on P800, and 24 % slower on MLU for DeepFM/DCN-Mix (SASRec is 7 % faster on MLU) |
+| Inference autocast | works (`--dtype bf16`) on P800 and MLU; 30–66 % slower on P800, and 5–24 % slower on the stable MLU rows (the ML-1M probe is unstable) |
 | Training autocast | works; one full epoch of the 2.6 M rows at batch 32: **3,243 samples/s** (804 s), epoch-1 gAUC 0.8230 vs 0.8245 for FP32 — numerically indistinguishable |
 | BF16 vs FP32 training, P800 | BF16 looks ~12–18 % faster at batch 32, but the FP32 reference is a 50-epoch mean under heavy contention (1,069–3,314 samples/s spread); a controlled same-load pair has not been run |
-| BF16 vs FP32 training, MLU | controlled same-card pairs: **12–18 % slower** (DeepFM 87,758 vs 99,295; DCN-Mix 86,505 vs 105,882 samples/s) |
+| BF16 vs FP32 training, MLU | controlled same-card pairs: SASRec 8–15 % slower, DSSM flat (with a lower metric), LightGCN identical, ads **12–18 % slower** (DeepFM 87,758 vs 99,295; DCN-Mix 86,505 vs 105,882 samples/s) |
 
-Two full MLU runs settle the accuracy question: DeepFM ends at AUC 0.813804 /
-logloss 0.438037 vs 0.813723 / 0.438119 in FP32, and DCN-Mix at 0.813678 /
-0.438308 vs 0.813739 / 0.438238 — every delta below 1e-4.  BF16 is
-accuracy-safe for these models on this stack.  Speed is a different story:
-BF16 training and inference are both slower on MLU (the DeepFM/DCN-Mix pair),
-while P800 DeepFM inference gains 18 %.  The direction is set by the vendor
-kernel mix, not by the model.
+BF16 training is therefore usable on this stack, while BF16 *inference* is
+slower — the opposite direction, and both are properties of the vendor kernels
+rather than of the models.  On MLU the sign is model-dependent, but no stable
+row is a speedup.  Two full MLU ads runs settle the accuracy question: DeepFM
+ends at AUC 0.813804 / logloss 0.438037 vs 0.813723 / 0.438119 in FP32, and
+DCN-Mix at 0.813678 / 0.438308 vs 0.813739 / 0.438238 — every delta below
+1e-4.  BF16 is accuracy-safe for these models, but on this stack it buys
+nothing in speed; keep FP32 unless memory forces the change.
 
 ## Reproduction
 
