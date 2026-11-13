@@ -72,6 +72,7 @@ Training throughput is the same `history.json` mean as above:
 | DCN-Mix / Criteo_x1 | `dcn_mix` (BARS) | 4096 | 18 | **108,573** | 108,385 | 1 h 33 m 27 s |
 | DCN-Mix / Criteo_x1 | `dcn_mix` (BARS, BF16) | 4096 | 18 | 91,842 | 92,499 | 1 h 50 m 04 s |
 | LightGCN / Gowalla, 2 cards | `lightgcn` (code) | 1024/rank | 1000 | **35,730** | 35,770 | 6 h 29 m 32 s |
+| LightGCN / Amazon-Book | `lightgcn_amazon_book` | 2048 | 1000 | **8,295** | 8,299 | 81 h 02 m 43 s |
 
 The DeepFM FP32 mean is pulled down by epochs 8–13, which shared the card with
 another job (42–47 k vs ~103 k samples/s); its median is the fair number, and
