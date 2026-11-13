@@ -78,6 +78,32 @@ The MLU run lands 0.0031 gAUC above the P800 run of the same config, 0.0022
 below the authors' own 0.8711, and 0.0182 below the paper's 0.8871 — the same
 implementation gap the paper structure shows on this data.
 
+## BF16
+
+Full run of the same config with `train.model.torch_dtype=bf16`
+(`2026-11-13 10:38:55 → 12:52:50`, card 1, 10 epochs, best epoch 3 — the same
+schedule as FP32).  Autocast: weights and optimizer state stay fp32, and the
+run wrote to a separate `ADREC_OUT_ROOT` (`out-bf16`).
+
+| Metric | FP32 (best epoch 3) | BF16 (best epoch 3) | Δ |
+| --- | --- | --- | --- |
+| test gAUC | 0.868916 | 0.869033 | +0.000117 |
+| test AUC | 0.871356 | 0.871681 | +0.000325 |
+| test logloss | 0.460640 | 0.459961 | −0.000679 |
+| epochs run | 10 | 10 | |
+| training time | 7,412.9 s | 7,953.2 s | +7.3 % |
+
+Both curves peak at epoch 3 and decay the same way; the per-epoch gAUC agrees
+to ≤ 0.004 (largest at epoch 2, where BF16 is ahead), and the late-epoch
+logloss inflation (0.61 → 0.92) appears in both.  Final deltas are ≤ 6.8e-4,
+so BF16 is accuracy-safe for this config.
+
+Throughput: **3,334 samples/s mean** (median 3,338) vs 3,584 / 3,632 FP32, i.e.
+**7.0 % slower** per epoch (779–793 s vs 701–773 s).  This is one of the
+small-batch (32) DIN configs where the conversion overhead outweighs the
+matmul gain, the same direction as the DeepFM / DCN-Mix BARS pairs and the
+opposite of the batch-1024 BARS `din` (+17.3 %).
+
 ## Notes
 
 * **No NaN.**  On the P800 the same config diverged at epoch 3 (best checkpoint

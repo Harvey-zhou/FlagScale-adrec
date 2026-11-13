@@ -68,6 +68,7 @@ Training throughput is the same `history.json` mean as above:
 | DIN / Amazon Electronics | `din` (BARS) | 1024 | 10 | **60,805** | 60,828 | 9 min 32 s |
 | DIN / Amazon Electronics | `din` (BARS, BF16) | 1024 | 10 | **71,294** | 71,840 | 8 min 28 s |
 | DIN / Amazon, released + Dice | `din_dice_author` | 32 | 10 | **3,584** | 3,632 | 2 h 03 m 33 s |
+| DIN / Amazon, released + Dice | `din_dice_author` (BF16) | 32 | 10 | 3,334 | 3,338 | 2 h 12 m 33 s |
 | DeepFM / Criteo_x1 | `deepfm` (BARS) | 4096 | 15 | 76,538 | **95,699** | 2 h 08 m 11 s |
 | DeepFM / Criteo_x1 | `deepfm` (BARS, BF16) | 4096 | 19 | 94,631 | 95,062 | 1 h 52 m 30 s |
 | DCN-Mix / Criteo_x1 | `dcn_mix` (BARS) | 4096 | 18 | **108,573** | 108,385 | 1 h 33 m 27 s |
@@ -81,7 +82,8 @@ it equals the BF16 median.  The controlled 1-epoch probes put BF16 at
 87,758 (DeepFM) and 86,505 (DCN-Mix) samples/s vs 99,295 and 105,882 for FP32 —
 i.e. BF16 training is 12–18 % slower.  The DCN-Mix full-run pair is clean and
 confirms it (−15 %).  The BARS DIN is the exception in the other direction:
-60,805 → 71,294 samples/s (**+17.3 %**) on the same 10-epoch budget.
+60,805 → 71,294 samples/s (**+17.3 %**) on the same 10-epoch budget, while the
+batch-32 `din_dice_author` pair loses 7 % (3,584 → 3,334).
 The 2-card LightGCN row is the first CNCL DDP run on node
 B; node A's 2-card paper-protocol row (63,700) uses half the per-rank batch and
 `index_add` instead of the default `sparse` propagation.
