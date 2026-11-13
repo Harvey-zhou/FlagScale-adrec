@@ -72,6 +72,42 @@ backend does not change the result.  It also confirms that the ~0.03 gAUC gap
 seen in the paper-protocol runs is a protocol/implementation gap, not a backend
 one: the same cards give 0.8565 for `din_paper_dice` and 0.8821 here.
 
+## BF16
+
+Full run of the same config with `train.model.torch_dtype=bf16`
+(`2026-11-13 10:38:55 → 10:50:42`, card 0, 10 epochs, early stop at 10, best
+epoch 8).  This is autocast — the weights and the optimizer state stay fp32 —
+and the run wrote to a separate `ADREC_OUT_ROOT` (`out-bf16`), so the FP32
+checkpoint, logs and metrics above are untouched.
+
+| Metric | FP32 (best epoch 8) | BF16 (best epoch 8) | Δ |
+| --- | --- | --- | --- |
+| test gAUC | 0.882122 | 0.882434 | +0.000312 |
+| test AUC | 0.884731 | 0.884691 | −0.000040 |
+| test logloss | 0.432159 | 0.432443 | +0.000284 |
+| epochs run | 10 | 10 | |
+| training time | 571.7 s | 507.8 s | −11.2 % |
+
+The two curves track each other to 0.0013 gAUC at every epoch (the largest gap
+is epoch 4, where FP32 is ahead), and both early-stop at epoch 10 with best
+epoch 8.  Every final delta is ≤ 3.1e-4, so BF16 is accuracy-safe here too.
+
+Throughput, unlike DeepFM and DCN-Mix, **improves**:
+
+| Quantity | FP32 | BF16 |
+| --- | --- | --- |
+| mean samples/s (all epochs) | 60,805 | **71,294** (+17.3 %) |
+| median samples/s | 60,828 | 71,840 |
+| training epoch of 2,548 steps | 42.9 s | 36.6 s |
+
+The FP32 run ran on card 1 alongside the DeepFM and DCN-Mix FP32 runs (three
+cards in use) and the BF16 run ran on card 0 alongside the other four wave-6
+runs (five cards in use), so the two are load-comparable.  FP32 held 60,567–60,885
+samples/s across the ten epochs; BF16 ranged 67,592–74,933 but never dropped
+below the FP32 maximum, so the improvement is not a contention artefact.  The
+earlier inference probe on this architecture was neutral (670,636 → 660,652
+rows/s, −1.5 %).
+
 ## Notes
 
 * Throughput: **60,828 samples/s median** (60,567–60,885 over the ten epochs),

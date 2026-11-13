@@ -15,10 +15,10 @@ are in use (see "Two MLU nodes" below).  Node A (2026-11-03 / 11-06 / 11-07 /
 Games, Steam), 2-card CNCL DDP on ML-1M, and the full LightGCN Gowalla and
 Yelp2018 runs (paper and code settings).  Node B (2026-11-09 / 11-13): the same
 `ads` and `rec` smokes, full `ads` `deepfm_paper` / `dcn_mix_paper` /
-`din_paper_dice` / `din_dice_author` and the three BARS `ads` runs (DeepFM and
-DCN-Mix also in BF16), `rec` `sasrec_paper` / `dssm` / 2-card code-settings
-`lightgcn` on Gowalla, and the 1,000-epoch `lightgcn_amazon_book` run (finished
-2026-11-13).  `ads din_paper` finished on node A (2026-11-11).
+`din_paper_dice` / `din_dice_author` and the three BARS `ads` runs (DIN,
+DeepFM and DCN-Mix also in BF16), `rec` `sasrec_paper` / `dssm` / 2-card
+code-settings `lightgcn` on Gowalla, and the 1,000-epoch `lightgcn_amazon_book`
+run (finished 2026-11-13).  `ads din_paper` finished on node A (2026-11-11).
 Multi-node is still TODO.
 
 ## Two MLU nodes
@@ -173,6 +173,7 @@ LightGCN split (52,643 users / 91,599 items / 2,380,730 train / 603,378 test).
 | ads `din_dice_author` (node B, card 5) | 1 | gAUC 0.8689 / AUC 0.8714 | gAUC 0.8658 / AUC 0.8681 | paper gAUC 0.8871 (authors' 0.8711) | 3,584 | 10 epochs, best epoch 3; no NaN (P800 diverged at epoch 3); `ads/results/din_dice_author_amazonelectronics_x1_mlu.md` |
 | ads `din_paper` (node A, card 4) | 1 | gAUC 0.8553 / AUC 0.8570 / logloss 0.4804 | gAUC 0.8555 (P800) | paper gAUC 0.8818 | ~5,100 | 50 epochs, 7 h 19 m; best epoch 5 |
 | ads `din` (BARS, node B, card 1) | 1 | gAUC 0.8821 / AUC 0.8847 | — (no P800 BARS run) | BARS gAUC 0.8835 / AUC 0.8860 | 60,828 | early stop @10, best epoch 8; `ads/results/din_amazonelectronics_x1_mlu.md` |
+| ads `din` (BARS, **BF16**, node B, card 0) | 1 | gAUC 0.8824 / AUC 0.8847 / logloss 0.4324 | — | BARS gAUC 0.8835 / AUC 0.8860 (FP32 same config 0.882122 / 0.884731) | 71,840 | 10 epochs, best 8; accuracy delta ≤3.1e-4; training **+17 %**, inference −1.5 %; `ads/results/din_amazonelectronics_x1_mlu.md#bf16` |
 | ads `deepfm` (BARS, node B, card 3) | 1 | AUC 0.8137 / logloss 0.4381 | — (no P800 BARS run) | BARS 0.8137 / 0.4381 | 95,699 | early stop @15, best epoch 13; card shared for epochs 8–13; `ads/results/deepfm_criteo_x1_mlu.md` |
 | ads `deepfm` (BARS, **BF16**, node B, card 3) | 1 | AUC 0.8138 / logloss 0.4380 | — | BARS 0.8137 / 0.4381 (FP32 same config 0.813723 / 0.438119) | 94,631 | 19 epochs, best 17; accuracy delta <1e-4; training ~12 % slower, inference −24 %; `ads/results/deepfm_criteo_x1_mlu.md#bf16` |
 | ads `dcn_mix` (BARS, node B, card 4) | 1 | AUC 0.8137 / logloss 0.4382 | — (no P800 BARS run) | BARS full-rank 0.8142 / 0.4378 | 108,385 | early stop @18, best epoch 16; `ads/results/dcn_mix_criteo_x1_mlu.md` |
@@ -314,29 +315,34 @@ FP32 and BF16 are the same within 0.1 %: embedding lookups and `index_add` are
 not autocast kernels, and the parameters stay FP32, so BF16 neither speeds up
 nor shrinks LightGCN training.
 
-### Node B: DeepFM and DCN-Mix (2026-11-11, cards 3 / 4)
+### Node B: BARS ads runs (2026-11-11/13, cards 0 / 3 / 4)
 
-The node A batch above left the two large ads models unmeasured; node B ran them
+The node A batch above left the large ads models unmeasured; node B ran them
 end-to-end on the same commit, BF16 in a separate `ADREC_OUT_ROOT` (`out-bf16`):
 
-| Model | dtype | Epochs (best) | Mean samples/s | Median | Test AUC | Test logloss | Train time |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| DeepFM | fp32 | 15 (13) | 76,538* | 95,699 | 0.813723 | 0.438119 | 7,690.5 s |
-| DeepFM | bf16 | 19 (17) | 94,631 | 95,062 | 0.813804 | 0.438037 | 6,750.4 s |
-| DCN-Mix | fp32 | 18 (16) | 108,573 | 108,385 | 0.813739 | 0.438238 | 5,606.5 s |
-| DCN-Mix | bf16 | 18 (16) | 91,842 | 92,499 | 0.813678 | 0.438308 | 6,604.4 s |
+| Model | dtype | Epochs (best) | Mean samples/s | Median | Test metric | Train time |
+| --- | --- | --- | --- | --- | --- | --- |
+| DIN | fp32 | 10 (8) | 60,805 | 60,828 | gAUC 0.882122 / AUC 0.884731 / logloss 0.432159 | 571.7 s |
+| DIN | bf16 | 10 (8) | **71,294** | 71,840 | gAUC 0.882434 / AUC 0.884691 / logloss 0.432443 | 507.8 s |
+| DeepFM | fp32 | 15 (13) | 76,538* | 95,699 | AUC 0.813723 / logloss 0.438119 | 7,690.5 s |
+| DeepFM | bf16 | 19 (17) | 94,631 | 95,062 | AUC 0.813804 / logloss 0.438037 | 6,750.4 s |
+| DCN-Mix | fp32 | 18 (16) | 108,573 | 108,385 | AUC 0.813739 / logloss 0.438238 | 5,606.5 s |
+| DCN-Mix | bf16 | 18 (16) | 91,842 | 92,499 | AUC 0.813678 / logloss 0.438308 | 6,604.4 s |
 
 \* The DeepFM FP32 mean includes epochs 8–13 on a shared card (42–47 k vs
 ~103 k samples/s); its median is the fair number.  The DCN-Mix pair is clean.
 Controlled 1-epoch probes on an idle card agree with the clean pair: DeepFM
 87,758 (BF16) vs 99,295 (FP32), DCN-Mix 86,505 vs 105,882 samples/s.
 
-Accuracy: every delta is below 1e-4 AUC / 1e-4 logloss, so BF16 is safe for
-these models.  Speed: BF16 training is 12–18 % slower; BF16 inference on the
-same checkpoints (`--task ads`, batch 8192, card 1) is also slower —
-DeepFM 1,032,959 → 781,934 rows/s (−24.3 %), DCN-Mix 972,714 → 744,244
-(−23.5 %), `autocast_active=true`.  On the P800 DeepFM *gains* 18 % in BF16
-inference, so the sign is set by the vendor kernel mix, not the model.
+Accuracy: every delta is ≤ 3.1e-4, so BF16 is safe for all three models.
+Speed: the sign is model-dependent even within `ads`.  DIN **gains 17.3 %** in
+training (60,805 → 71,294 samples/s), while DeepFM and DCN-Mix lose 12–18 %;
+BF16 inference on the same checkpoints (`--task ads`, batch 8192, card 1) loses
+~24 % — DeepFM 1,032,959 → 781,934 rows/s (−24.3 %), DCN-Mix 972,714 → 744,244
+(−23.5 %), and DIN is neutral (670,636 → 660,652, −1.5 %),
+`autocast_active=true` throughout.  On the P800 DeepFM *gains* 18 % in BF16
+inference, so the sign is set by the vendor kernel mix and the model shape, not
+by BF16 itself.
 
 ### Inference (medians; batch 1024 for SASRec / LightGCN, 8192 for DSSM and DIN)
 
@@ -365,12 +371,13 @@ two large ads models lose ~24 %.
 
 ### What to use BF16 for
 
-Not a throughput win on this stack: SASRec training is 8–15 % slower and its
-inference is mixed; LightGCN training is identical and inference slower; DeepFM
-and DCN-Mix are 12–18 % slower in training and ~24 % slower in inference.  DIN
-inference is neutral (−1.5 %).  Accuracy is not the constraint — the ads full
-runs stay within 1e-4 of FP32.  Keep FP32 for throughput; BF16 is only worth it
-where memory or an external requirement makes it necessary.
+Mostly not a throughput win on this stack: SASRec training is 8–15 % slower and
+its inference is mixed; LightGCN training is identical and inference slower;
+DeepFM and DCN-Mix are 12–18 % slower in training and ~24 % slower in inference.
+The exception is the BARS DIN: 17.3 % faster training, neutral inference
+(−1.5 %).  Accuracy is not the constraint — the ads full runs stay within 3.1e-4
+of FP32.  Keep FP32 by default; the only ads config where BF16 pays is DIN, and
+only in training.
 
 ## How the launcher keeps a run honest
 

@@ -66,6 +66,7 @@ Training throughput is the same `history.json` mean as above:
 | Run | Config | Batch | Epochs | Mean samples/s | Median | Train time |
 | --- | --- | --- | --- | --- | --- | --- |
 | DIN / Amazon Electronics | `din` (BARS) | 1024 | 10 | **60,805** | 60,828 | 9 min 32 s |
+| DIN / Amazon Electronics | `din` (BARS, BF16) | 1024 | 10 | **71,294** | 71,840 | 8 min 28 s |
 | DIN / Amazon, released + Dice | `din_dice_author` | 32 | 10 | **3,584** | 3,632 | 2 h 03 m 33 s |
 | DeepFM / Criteo_x1 | `deepfm` (BARS) | 4096 | 15 | 76,538 | **95,699** | 2 h 08 m 11 s |
 | DeepFM / Criteo_x1 | `deepfm` (BARS, BF16) | 4096 | 19 | 94,631 | 95,062 | 1 h 52 m 30 s |
@@ -79,7 +80,9 @@ another job (42–47 k vs ~103 k samples/s); its median is the fair number, and
 it equals the BF16 median.  The controlled 1-epoch probes put BF16 at
 87,758 (DeepFM) and 86,505 (DCN-Mix) samples/s vs 99,295 and 105,882 for FP32 —
 i.e. BF16 training is 12–18 % slower.  The DCN-Mix full-run pair is clean and
-confirms it (−15 %).  The 2-card LightGCN row is the first CNCL DDP run on node
+confirms it (−15 %).  The BARS DIN is the exception in the other direction:
+60,805 → 71,294 samples/s (**+17.3 %**) on the same 10-epoch budget.
+The 2-card LightGCN row is the first CNCL DDP run on node
 B; node A's 2-card paper-protocol row (63,700) uses half the per-rank batch and
 `index_add` instead of the default `sparse` propagation.
 
@@ -122,16 +125,18 @@ is not even stable across backends.  The matching MLU training results (SASRec
 | Inference autocast | works (`--dtype bf16`) on P800 and MLU; 30–66 % slower on P800, and 5–24 % slower on the stable MLU rows (the ML-1M probe is unstable) |
 | Training autocast | works; one full epoch of the 2.6 M rows at batch 32: **3,243 samples/s** (804 s), epoch-1 gAUC 0.8230 vs 0.8245 for FP32 — numerically indistinguishable |
 | BF16 vs FP32 training, P800 | BF16 looks ~12–18 % faster at batch 32, but the FP32 reference is a 50-epoch mean under heavy contention (1,069–3,314 samples/s spread); a controlled same-load pair has not been run |
-| BF16 vs FP32 training, MLU | controlled same-card pairs: SASRec 8–15 % slower, DSSM flat (with a lower metric), LightGCN identical, ads **12–18 % slower** (DeepFM 87,758 vs 99,295; DCN-Mix 86,505 vs 105,882 samples/s) |
+| BF16 vs FP32 training, MLU | controlled same-card pairs: SASRec 8–15 % slower, DSSM flat (with a lower metric), LightGCN identical, DeepFM / DCN-Mix **12–18 % slower** (DeepFM 87,758 vs 99,295; DCN-Mix 86,505 vs 105,882 samples/s), but BARS DIN **+17.3 %** (60,805 → 71,294) |
 
 BF16 training is therefore usable on this stack, while BF16 *inference* is
 slower — the opposite direction, and both are properties of the vendor kernels
-rather than of the models.  On MLU the sign is model-dependent, but no stable
-row is a speedup.  Two full MLU ads runs settle the accuracy question: DeepFM
-ends at AUC 0.813804 / logloss 0.438037 vs 0.813723 / 0.438119 in FP32, and
-DCN-Mix at 0.813678 / 0.438308 vs 0.813739 / 0.438238 — every delta below
-1e-4.  BF16 is accuracy-safe for these models, but on this stack it buys
-nothing in speed; keep FP32 unless memory forces the change.
+rather than of the models.  On MLU the sign is model-dependent, and the full
+runs settle it: DIN gains 17 % in training and is neutral in inference, while
+DeepFM and DCN-Mix lose in both.  Accuracy is not the constraint — three full
+MLU ads runs end within 3.1e-4 of FP32 (DeepFM AUC 0.813804 / logloss 0.438037
+vs 0.813723 / 0.438119; DCN-Mix 0.813678 / 0.438308 vs 0.813739 / 0.438238; DIN
+gAUC 0.882434 / AUC 0.884691 / logloss 0.432443 vs 0.882122 / 0.884731 /
+0.432159).  BF16 is accuracy-safe; use it for throughput only where the model
+is DIN-like, and keep FP32 elsewhere unless memory forces the change.
 
 ## Reproduction
 
