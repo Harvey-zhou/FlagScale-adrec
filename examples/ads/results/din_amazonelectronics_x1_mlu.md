@@ -104,9 +104,22 @@ The FP32 run ran on card 1 alongside the DeepFM and DCN-Mix FP32 runs (three
 cards in use) and the BF16 run ran on card 0 alongside the other four wave-6
 runs (five cards in use), so the two are load-comparable.  FP32 held 60,567–60,885
 samples/s across the ten epochs; BF16 ranged 67,592–74,933 but never dropped
-below the FP32 maximum, so the improvement is not a contention artefact.  The
-earlier inference probe on this architecture was neutral (670,636 → 660,652
-rows/s, −1.5 %).
+below the FP32 maximum, so the improvement is not a contention artefact.
+
+Inference on this checkpoint (`--task ads`, batch 8192, card 0, three timed
+passes, 384,806 test rows) gains even more:
+
+| dtype | autocast_active | s/pass | rows/s (mean) | rows/s (median) |
+| --- | --- | --- | --- | --- |
+| fp32 | false | 1.863 / 1.878 / 1.839 | 206,927 | 206,609 |
+| bf16 | **true** | 1.394 / 1.399 / 1.406 | 274,970 | 275,113 (+33.2 %) |
+
+Both directions are positive for the BARS DIN, unlike the paper-protocol DIN
+probe on node A (670,636 → 660,652 rows/s, −1.5 %): the BARS attention
+`[512, 256]` and DNN `[1024, 512, 256]` are large enough for the BF16 kernels
+to pay off, while the paper `[80, 40]` MLPs are not.  It is the same
+pattern as the training number above and the opposite of DeepFM / DCN-Mix,
+whose batch-4096/512 configs lose in both directions.
 
 ## Notes
 

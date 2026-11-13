@@ -176,7 +176,7 @@ LightGCN split (52,643 users / 91,599 items / 2,380,730 train / 603,378 test).
 | ads `din_dice_author` (**BF16**, node B, card 1) | 1 | gAUC 0.8690 / AUC 0.8717 / logloss 0.4600 | — | P800 same config gAUC 0.8658 (FP32 same config 0.868916 / 0.871356) | 3,338 | 10 epochs, best epoch 3; accuracy Δ ≤ 6.8e-4; training −7 %; `ads/results/din_dice_author_amazonelectronics_x1_mlu.md#bf16` |
 | ads `din_paper` (node A, card 4) | 1 | gAUC 0.8553 / AUC 0.8570 / logloss 0.4804 | gAUC 0.8555 (P800) | paper gAUC 0.8818 | ~5,100 | 50 epochs, 7 h 19 m; best epoch 5 |
 | ads `din` (BARS, node B, card 1) | 1 | gAUC 0.8821 / AUC 0.8847 | — (no P800 BARS run) | BARS gAUC 0.8835 / AUC 0.8860 | 60,828 | early stop @10, best epoch 8; `ads/results/din_amazonelectronics_x1_mlu.md` |
-| ads `din` (BARS, **BF16**, node B, card 0) | 1 | gAUC 0.8824 / AUC 0.8847 / logloss 0.4324 | — | BARS gAUC 0.8835 / AUC 0.8860 (FP32 same config 0.882122 / 0.884731) | 71,840 | 10 epochs, best 8; accuracy delta ≤3.1e-4; training **+17 %**, inference −1.5 %; `ads/results/din_amazonelectronics_x1_mlu.md#bf16` |
+| ads `din` (BARS, **BF16**, node B, card 0) | 1 | gAUC 0.8824 / AUC 0.8847 / logloss 0.4324 | — | BARS gAUC 0.8835 / AUC 0.8860 (FP32 same config 0.882122 / 0.884731) | 71,840 | 10 epochs, best 8; accuracy delta ≤3.1e-4; training **+17 %**, inference **+33 %**; `ads/results/din_amazonelectronics_x1_mlu.md#bf16` |
 | ads `deepfm` (BARS, node B, card 3) | 1 | AUC 0.8137 / logloss 0.4381 | — (no P800 BARS run) | BARS 0.8137 / 0.4381 | 95,699 | early stop @15, best epoch 13; card shared for epochs 8–13; `ads/results/deepfm_criteo_x1_mlu.md` |
 | ads `deepfm` (BARS, **BF16**, node B, card 3) | 1 | AUC 0.8138 / logloss 0.4380 | — | BARS 0.8137 / 0.4381 (FP32 same config 0.813723 / 0.438119) | 94,631 | 19 epochs, best 17; accuracy delta <1e-4; training ~12 % slower, inference −24 %; `ads/results/deepfm_criteo_x1_mlu.md#bf16` |
 | ads `dcn_mix` (BARS, node B, card 4) | 1 | AUC 0.8137 / logloss 0.4382 | — (no P800 BARS run) | BARS full-rank 0.8142 / 0.4378 | 108,385 | early stop @18, best epoch 16; `ads/results/dcn_mix_criteo_x1_mlu.md` |
@@ -339,11 +339,10 @@ Controlled 1-epoch probes on an idle card agree with the clean pair: DeepFM
 
 Accuracy: every delta is ≤ 3.1e-4, so BF16 is safe for all three models.
 Speed: the sign is model-dependent even within `ads`.  DIN **gains 17.3 %** in
-training (60,805 → 71,294 samples/s), while DeepFM and DCN-Mix lose 12–18 %;
-BF16 inference on the same checkpoints (`--task ads`, batch 8192, card 1) loses
-~24 % — DeepFM 1,032,959 → 781,934 rows/s (−24.3 %), DCN-Mix 972,714 → 744,244
-(−23.5 %), and DIN is neutral (670,636 → 660,652, −1.5 %),
-`autocast_active=true` throughout.  On the P800 DeepFM *gains* 18 % in BF16
+training (60,805 → 71,294 samples/s) and **32.9 %** in inference
+(206,927 → 274,970 rows/s), while DeepFM and DCN-Mix lose 12–18 % in training
+and ~24 % in inference (DeepFM 1,032,959 → 781,934, DCN-Mix 972,714 → 744,244,
+`autocast_active=true` throughout).  On the P800 DeepFM *gains* 18 % in BF16
 inference, so the sign is set by the vendor kernel mix and the model shape, not
 by BF16 itself.
 
@@ -356,7 +355,8 @@ by BF16 itself.
 | SASRec | Beauty | 307,047 | 271,996 | −11.4 % |
 | SASRec | Steam | 305,305 | 275,929 | −9.6 % |
 | DSSM | ML-1M (full catalogue) | 975,888 | 924,686 | −5.2 % |
-| DIN | AmazonElectronics (384,806 rows) | 670,636 | 660,652 | −1.5 % |
+| DIN | AmazonElectronics (paper config, node A) | 670,636 | 660,652 | −1.5 % |
+| DIN | AmazonElectronics (BARS, 384,806 rows, node B) | 206,609 | 275,113 | **+33.2 %** |
 | DeepFM | Criteo_x1 (4,587,167 rows, node B) | 1,031,653 | 783,970 | −24.0 % |
 | DCN-Mix | Criteo_x1 (4,587,167 rows, node B) | 974,769 | 748,296 | −23.2 % |
 | LightGCN | Gowalla | 2,457,798 | 2,260,501 | −8.0 % |
@@ -365,22 +365,24 @@ by BF16 itself.
 DSSM online-only throughput (catalogue encoding excluded): FP32 1,432,879 /
 BF16 1,368,100 rows/s (medians).
 
-BF16 inference is slower on seven of the ten rows (5–24 %).  ML-1M is the one
-place where BF16 looked faster, and it does not reproduce: four runs gave
-medians 117,134 / 217,161 / 225,274 rows/s while FP32 stayed at 192k–211k, i.e.
-the BF16 result swings by 2× and its sign is not a result.  Yelp2018 (+1.5 %)
-is within run-to-run noise on a shared node.  DIN is neutral (−1.5 %) and the
-two large ads models lose ~24 %.
+BF16 inference is slower on seven of the eleven rows (5–24 %) and faster on
+the BARS DIN by a third.  The two DIN rows are the clearest model-shape effect:
+the BARS attention `[512, 256]` / DNN `[1024, 512, 256]` gains 33 %, the paper
+`[80, 40]` MLPs are neutral.  ML-1M is the one rec row where BF16 looked faster,
+and it does not reproduce: four runs gave medians 117,134 / 217,161 / 225,274
+rows/s while FP32 stayed at 192k–211k, i.e. the BF16 result swings by 2× and
+its sign is not a result.  Yelp2018 (+1.5 %) is within run-to-run noise on a
+shared node.  The two large ads models lose ~24 %.
 
 ### What to use BF16 for
 
 Mostly not a throughput win on this stack: SASRec training is 8–15 % slower and
 its inference is mixed; LightGCN training is identical and inference slower;
 DeepFM and DCN-Mix are 12–18 % slower in training and ~24 % slower in inference.
-The exception is the BARS DIN: 17.3 % faster training, neutral inference
-(−1.5 %).  Accuracy is not the constraint — the ads full runs stay within 3.1e-4
-of FP32.  Keep FP32 by default; the only ads config where BF16 pays is DIN, and
-only in training.
+The exception is the BARS DIN: 17.3 % faster training and 33.2 % faster
+inference.  Accuracy is not the constraint — the ads full runs stay within 3.1e-4
+of FP32.  Keep FP32 by default; the only ads config where BF16 pays is the
+BARS DIN, in both directions.
 
 ## How the launcher keeps a run honest
 

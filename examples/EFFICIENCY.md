@@ -99,7 +99,8 @@ passes):
 | SASRec | Beauty test (50,498 users) | 50,498 | 0.1645 | 307,047 | 0.1857 | 271,996 |
 | SASRec | Steam test (332,925 users) | 332,925 | 1.0905 | 305,305 | 1.2066 | 275,929 |
 | DSSM | MovieLens-1M test (full-catalogue retrieval) | 6,040 | 0.0062 | 975,888 | 0.0065 | 924,686 |
-| DIN | AmazonElectronics test (384,806 rows) | 384,806 | 0.5738 | 670,636 | 0.5825 | 660,652 |
+| DIN | AmazonElectronics test (paper config, node A) | 384,806 | 0.5738 | 670,636 | 0.5825 | 660,652 |
+| DIN | AmazonElectronics test (BARS, node B) | 384,806 | 1.8625 | 206,609 | 1.3987 | **275,113** |
 | DeepFM | Criteo_x1 test (4,587,167) | 4,587,167 | 4.4464 | 1,031,653 | 5.8512 | 783,970 |
 | DCN-Mix | Criteo_x1 test (4,587,167) | 4,587,167 | 4.7059 | 974,769 | 6.1301 | 748,296 |
 | LightGCN | Gowalla test (full ranking) | 29,858 | 0.0121 | 2,457,798 | 0.0128 | 2,260,501 |
@@ -108,37 +109,42 @@ passes):
 `autocast_active=true` for every BF16 pass.  DSSM online-only (catalogue
 encoding excluded): FP32 1,432,879 / BF16 1,368,100 rows/s (medians).
 
-On MLU, BF16 inference loses on seven of the ten rows (5–24 %); DIN is neutral
-(−1.5 %) and Yelp2018 (+1.5 %) is within noise.  The MovieLens-1M row is the
+On MLU, BF16 inference loses on seven of the eleven rows (5–24 %) and wins on
+the two large-MLP cases: the BARS DIN by 33 % and Yelp2018 by 1.5 % (the latter
+within noise).  The two DIN rows show the model-shape effect cleanly — BARS
+attention `[512, 256]` / DNN `[1024, 512, 256]` gains a third, the paper
+`[80, 40]` MLPs are neutral (−1.5 %) — and within `ads` the BARS DIN is the only
+winner while DeepFM / DCN-Mix lose ~24 %.  The MovieLens-1M row is the rec
 exception that does not hold up: four runs gave BF16 medians of 117,134 /
 217,161 / 225,274 rows/s against a stable FP32 192k–211k, so it is recorded as
 a range rather than a speedup.  Unlike the P800 SASRec row (always slower under
 BF16), the MLU result is mixed, i.e. the vendor kernel mix — not the model shape
 — decides.  On the P800 the same DeepFM bench *gains* 18 % in BF16, so the sign
 is not even stable across backends.  The matching MLU training results (SASRec
-8–15 % slower per epoch, DSSM flat with a lower metric, LightGCN unchanged, ads
-12–18 % slower) and the exact commands are in
+8–15 % slower per epoch, DSSM flat with a lower metric, LightGCN unchanged, BARS
+DIN +17 %, DeepFM / DCN-Mix 12–18 % slower) and the exact commands are in
 [`CAMBRICON.md`](CAMBRICON.md#bf16-batch-results-2026-11-1112).
 
 ## BF16 status
 
 | Item | Status |
 | --- | --- |
-| Inference autocast | works (`--dtype bf16`) on P800 and MLU; 30–66 % slower on P800, and 5–24 % slower on the stable MLU rows (the ML-1M probe is unstable) |
+| Inference autocast | works (`--dtype bf16`) on P800 and MLU; 30–66 % slower on P800, and 5–24 % slower on most stable MLU rows — but +33 % on the BARS DIN (the ML-1M probe is unstable) |
 | Training autocast | works; one full epoch of the 2.6 M rows at batch 32: **3,243 samples/s** (804 s), epoch-1 gAUC 0.8230 vs 0.8245 for FP32 — numerically indistinguishable |
 | BF16 vs FP32 training, P800 | BF16 looks ~12–18 % faster at batch 32, but the FP32 reference is a 50-epoch mean under heavy contention (1,069–3,314 samples/s spread); a controlled same-load pair has not been run |
 | BF16 vs FP32 training, MLU | controlled same-card pairs: SASRec 8–15 % slower, DSSM flat (with a lower metric), LightGCN identical, DeepFM / DCN-Mix **12–18 % slower** (DeepFM 87,758 vs 99,295; DCN-Mix 86,505 vs 105,882 samples/s), but BARS DIN **+17.3 %** (60,805 → 71,294) |
 
 BF16 training is therefore usable on this stack, while BF16 *inference* is
-slower — the opposite direction, and both are properties of the vendor kernels
-rather than of the models.  On MLU the sign is model-dependent, and the full
-runs settle it: DIN gains 17 % in training and is neutral in inference, while
-DeepFM and DCN-Mix lose in both.  Accuracy is not the constraint — three full
-MLU ads runs end within 3.1e-4 of FP32 (DeepFM AUC 0.813804 / logloss 0.438037
-vs 0.813723 / 0.438119; DCN-Mix 0.813678 / 0.438308 vs 0.813739 / 0.438238; DIN
-gAUC 0.882434 / AUC 0.884691 / logloss 0.432443 vs 0.882122 / 0.884731 /
-0.432159).  BF16 is accuracy-safe; use it for throughput only where the model
-is DIN-like, and keep FP32 elsewhere unless memory forces the change.
+usually slower — the opposite direction, and both are properties of the vendor
+kernels rather than of the models.  On MLU the sign is model-dependent, and the
+full runs settle it: the BARS DIN gains 17 % in training and 33 % in inference,
+while DeepFM and DCN-Mix lose in both.  Accuracy is not the constraint — the
+full MLU ads runs end within 3.1e-4 of FP32 (DeepFM AUC 0.813804 / logloss
+0.438037 vs 0.813723 / 0.438119; DCN-Mix 0.813678 / 0.438308 vs 0.813739 /
+0.438238; DIN gAUC 0.882434 / AUC 0.884691 / logloss 0.432443 vs 0.882122 /
+0.884731 / 0.432159).  BF16 is accuracy-safe; use it for throughput where the
+model has large MLPs (DIN-like), and keep FP32 elsewhere unless memory forces
+the change.
 
 ## Reproduction
 
