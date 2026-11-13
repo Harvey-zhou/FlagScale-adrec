@@ -73,6 +73,31 @@ the first epoch on this 33M-row training set.
 The MLU run reproduces the P800 run of the same config to within 0.00003 AUC
 and 0.00003 logloss, so the backend does not change the result.
 
+## BF16
+
+Full run of the same config with `train.model.torch_dtype=bf16`
+(`2026-11-13 10:38:55 → 11:02:50`, card 2, 6 epochs, early stop at 6, best
+epoch 1 — the same schedule as FP32).  Autocast: weights and optimizer state
+stay fp32, and the run wrote to a separate `ADREC_OUT_ROOT` (`out-bf16`).
+
+| Metric | FP32 (best epoch 1) | BF16 (best epoch 1) | Δ |
+| --- | --- | --- | --- |
+| test AUC | 0.803867 | 0.803764 | −0.000103 |
+| test logloss | 0.447683 | 0.447897 | +0.000214 |
+| best valid AUC | 0.80343 | 0.80335 | −0.00008 |
+| epochs run | 6 | 6 | |
+
+Both curves overfit identically: the per-epoch valid AUC agrees to ≤ 0.001 at
+every epoch, and the final gap is 1.0e-4 AUC / 2.1e-4 logloss — the same order
+as the BARS DeepFM pair, i.e. BF16 is accuracy-neutral here too.
+
+Throughput is the awkward one, because the FP32 baseline was taken on a shared
+card (see the note above): its full-run median is 58,655 samples/s but its two
+clean epochs ran at ~218 k.  BF16 held 162–178 k samples/s for all six epochs
+(median **173,151**), so against the clean FP32 rate it is **~20 % slower**,
+consistent with the BARS DeepFM probes (87,758 vs 99,295).  The 43.9 min → 19.9
+min wall-clock drop is the co-tenant leaving, not BF16.
+
 ## Notes
 
 * **Card sharing affects throughput, not the metric.**  Card 4 was shared with

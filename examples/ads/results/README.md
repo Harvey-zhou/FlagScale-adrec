@@ -18,7 +18,7 @@ the `metrics.json` / `history.json` next to each checkpoint.
 | [DeepFM, BARS/FuxiCTR, MLU](deepfm_criteo_x1_mlu.md) | Criteo_x1 | finished (early stop @15, best epoch 13) | test AUC 0.8137 / logloss 0.4381 (BARS 0.8137 / 0.4381) |
 | [DCN-Mix, BARS/FuxiCTR, MLU](dcn_mix_criteo_x1_mlu.md) | Criteo_x1 | finished (early stop @18, best epoch 16) | test AUC 0.8137 / logloss 0.4382 (BARS full-rank 0.8142 / 0.4378) |
 | [DeepFM paper protocol](deepfm_paper_criteo_x1.md) | Criteo_x1 | finished (early stop @6, best epoch 1) | test AUC 0.8040 / logloss 0.4477 (BARS on same split 0.8137 / 0.4381) |
-| [DeepFM paper protocol, MLU](deepfm_paper_criteo_x1_mlu.md) | Criteo_x1 | finished (early stop @6, best epoch 1) | test AUC 0.8039 / logloss 0.4477 (P800 same config 0.8040 / 0.4477) |
+| [DeepFM paper protocol, MLU](deepfm_paper_criteo_x1_mlu.md) | Criteo_x1 | finished (early stop @6, best epoch 1; FP32 and BF16) | test AUC 0.8039 / logloss 0.4477 (P800 same config 0.8040 / 0.4477); BF16 0.8038 / 0.4479 |
 | [DCN-Mix paper protocol](dcn_mix_paper_criteo_x1.md) | Criteo_x1 | finished (3 epochs, best epoch 3) | test AUC 0.8104 / logloss 0.4411 (BARS on same split 0.8142 / 0.4378; paper 0.8112 on a different split) |
 | [DCN-Mix paper protocol, MLU](dcn_mix_paper_criteo_x1_mlu.md) | Criteo_x1 | finished (3 epochs, best epoch 3) | test AUC 0.8104 / logloss 0.4411 (P800 same config 0.8104 / 0.4411) |
 
