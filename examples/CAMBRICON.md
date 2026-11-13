@@ -272,13 +272,14 @@ Probe checkpoint: `<ADREC_OUT_ROOT>/rec/ckpts/sasrec_paper-mlu` under a separate
 `metrics.json` / `history.json` and the two bench JSON lines.  The ads BF16
 checkpoints stay in `/home/zhouhao/flagos-adrec-cambricon/out-bf16/`.
 
-## BF16 batch results (2026-11-11/12)
+## BF16 batch results (2026-11-11/13)
 
 Every BF16 training run used a separate `ADREC_OUT_ROOT`
 (`flagos-adrec-cambricon-bf16`) so the FP32 checkpoints were not overwritten.
 Inference reads the FP32 checkpoint of the same config, so the two columns
 isolate the inference dtype.  The SASRec / DSSM / LightGCN runs are node A; the
-DeepFM / DCN-Mix pair was run on node B and is marked below.
+`ads` full runs (BARS and the two paper protocols) are node B, in the section
+after the single-card probes.
 
 ### Training (FP32 vs BF16)
 
