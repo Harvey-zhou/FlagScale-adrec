@@ -72,6 +72,30 @@ run that has not flattened yet, as on the P800.
 The MLU run reproduces the P800 run of the same config to within 0.00003 AUC
 and 0.00003 logloss.
 
+## BF16
+
+Full run of the same config with `train.model.torch_dtype=bf16`
+(`2026-11-13 10:38:55 → 12:59:28`, card 3, 3 epochs, best epoch 3 — the same
+schedule as FP32).  Autocast: weights and optimizer state stay fp32, and the
+run wrote to a separate `ADREC_OUT_ROOT` (`out-bf16`).
+
+| Metric | FP32 (best epoch 3) | BF16 (best epoch 3) | Δ |
+| --- | --- | --- | --- |
+| test AUC | 0.810395 | 0.810439 | +0.000044 |
+| test logloss | 0.441118 | 0.441077 | −0.000041 |
+| best valid AUC | 0.810132 | 0.810189 | +0.000057 |
+| epochs run | 3 | 3 | |
+| training time | 7,393.1 s | 8,197.3 s | +10.9 % |
+
+The per-epoch validation AUC agrees to 3e-5 and the final metric to 4e-5, so
+BF16 is accuracy-neutral on this config — the tightest ads pair so far.
+
+Throughput: the FP32 epoch 1 (2,721 s) carried warm-up and the co-tenant, so
+the fair comparison is epochs 2–3: FP32 14,282 / 14,232 vs BF16 12,324 / 12,265
+samples/s, i.e. **~13.7 % slower**, of the same order as the BARS DCN-Mix pair
+(−15 %).  The batch is 512, far below the 4096 of the BARS config, and the
+small-batch kernels lose more in conversion than they gain in matmul.
+
 ## Notes
 
 * Throughput: **14,232 samples/s median** (epoch 1 12,128, epochs 2–3 14,282 /
